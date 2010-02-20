@@ -1,0 +1,745 @@
+#!/usr/bin/perl
+package App::cpanminus;
+use strict;
+use Config;
+use Cwd;
+use File::Basename qw(basename);
+use Fatal qw(chdir);
+use File::Spec;
+use Getopt::Long;
+
+use vars qw($VERSION);
+$VERSION = "0.01";
+
+my($notest, $force, $sudo, $help);
+
+GetOptions(
+    'f|force'  => \$force,
+    'n|notest' => \$notest,
+    'sudo'     => \$sudo,
+    'h|help'   => \$help,
+);
+
+help() if $help;
+
+my $test = sub {
+    my $cmd = shift;
+    return 1 if $notest;
+    return run($cmd) || $force;
+};
+
+my $install = sub {
+    my $cmd = shift;
+    $cmd = "sudo $cmd" if $sudo;
+    run($cmd);
+};
+
+# sanity check
+unless ($ENV{PERL_MM_OPT} or $ENV{MODULEBUILDRC} or -w $Config{installsitelib} or $sudo) {
+    die "Can't write to $Config{installsitelib}: Run me as root or with --sudo option.\n";
+}
+
+sub get($);
+sub mirror($$);
+sub untar;
+sub which;
+
+my $make = which $Config{make};
+
+init_tools();
+
+sub diag {
+    print STDERR @_;
+}
+
+sub help {
+    die <<USAGE;
+Usage: cpanm [--force] [--notest] [--sudo] Module
+
+  -f,--force     force install
+  -n,--notest    Do not run unit tests
+  -s,--sudo      sudo to run install commands
+
+Examples:
+
+  # install CGI
+  cpanm CGI
+
+  # force install MojoMojo and its deps
+  cpanm -f MojoMojo
+
+  # specify the version
+  cpanm MIYAGAWA/Plack-0.99_05.tar.gz
+
+  # install from the current directory, just like `cpan .`
+  cpanm .
+
+USAGE
+}
+
+my $Base = $ENV{CPANMINUS_HOME} || "$ENV{HOME}/.cpanm";
+mkdir $Base, 0777 unless -e $Base;
+
+unless (@ARGV) {
+    help();
+}
+
+my %seen;
+my $quote = $^O eq 'MSWin32' ? q/"/ : q/'/;
+
+for my $module (@ARGV) {
+    install_module($module);
+}
+
+sub run($) {
+    my $cmd = shift;
+    !system $cmd;
+}
+
+sub _chdir {
+    chdir(File::Spec->canonpath($_[0]));
+}
+
+sub install_module {
+    my $module = shift;
+
+    if ($module eq '.') {
+        return build_stuff($module, Cwd::cwd());
+    }
+
+    if ($seen{$module}++) {
+        diag "Already tried $module. Skipping\n";
+        return;
+    }
+
+    my $uri = $module =~ /^(ftp|https?|file):/ ? $module
+            : $module =~ m{^[A-Z]{3,}/}        ? ("http://search.cpan.org/CPAN/authors/id/".substr($module, 0, 1).'/'.substr($module, 0, 2).'/'.$module)
+                                               : find_module($module);
+    unless ($uri) {
+        diag "Can't find module $module\n";
+        return;
+    }
+
+    if($uri =~ m{/perl-5}){
+        diag "skip $uri\n";
+        return;
+    }
+
+    _chdir $Base;
+    diag "Fetching $uri ...\n";
+
+    my $name = basename $uri;
+    mirror($uri, $name);
+
+    unless (-e $name) {
+        diag "Failed to download $uri\n";
+        return;
+    }
+
+    diag "Unpacking $name ...\n";
+    my $dir = untar $name;
+    unless ($dir) {
+        diag "Failed to unpack $name: no directory\n";
+        return;
+    }
+
+    diag "Entering $dir ...\n";
+    _chdir $dir;
+
+    build_stuff($module, $dir)
+}
+
+sub build_stuff {
+    my($module, $dir) = @_;
+
+    if (-e 'META.yml') {
+        diag "Checking dependencies ...\n";
+        my $meta = eval { (Parse::CPAN::Meta::LoadFile('META.yml'))[0] };
+        my %deps = (%{$meta->{requires} || {}}, %{$meta->{build_requires} || {}});
+
+        my @install;
+        while (my($mod, $ver) = each %deps) {
+            next if $mod eq 'perl' or $mod eq 'Config';
+            diag "Checking if you have $mod $ver ... ";
+            $ver = '' if $ver == 0;
+            my $test = `$^X -e ${quote}eval q{use $mod $ver (); print q{OK:}, q/$mod/->VERSION$quote}`;
+            if ($test =~ s/^OK://) {
+                diag "Yes ($test)\n";
+            } else {
+                diag "No\n";
+                push @install, $mod;
+            }
+        }
+
+        for my $mod (@install) {
+            install_module($mod);
+        }
+
+        _chdir $Base;
+        _chdir $dir;
+    }
+
+    diag "Building $module ...\n";
+
+    # fake AutoInstall
+    $ENV{PERL5_CPAN_IS_RUNNING} = 1;
+
+    unless ($make or -e "Build.PL") {
+        diag "Oops, you don't have make. Trying to build a stub Build.PL for you. Hope this works!\n";
+        open my $fh, ">", "Build.PL" or die $!;
+        print $fh qq{require Module::Build; Module::Build->new(module_name => "$module")->create_build_script};
+    }
+
+    if (-e 'Build.PL') {
+        run "$^X Build.PL" &&
+        run "$^X ./Build"           &&
+        $test->("$^X ./Build test") &&
+        $install->("$^X ./Build install");
+    } elsif ($make && -e 'Makefile.PL') {
+        run "$^X Makefile.PL" &&
+        run "$make"           &&
+        $test->("$make test") &&
+        $install->("$make install");
+    } else {
+        diag "Sorry, I don't know how to build $dir\n";
+        return;
+    }
+}
+
+sub find_module {
+    my $module = shift;
+    my $html = get("http://search.cpan.org/perldoc?$module");
+    $html =~ m!Download:<br/> <a href="(/CPAN/.*?)">.*?</a></p>!
+        and return "http://search.cpan.org$1";
+
+    return;
+}
+
+sub which {
+    my($name) = @_;
+    my $exe_ext = $Config{_exe};
+    foreach my $dir(File::Spec->path){
+        my $fullpath = File::Spec->catfile($dir, $name);
+        if (-x $fullpath || -x ($fullpath .= $exe_ext)){
+            if ($fullpath =~ /\s/ && $fullpath !~ /^$quote/) {
+                $fullpath = "$quote$fullpath$quote"
+            }
+            return $fullpath;
+        }
+    }
+    return;
+}
+
+sub init_tools {
+    if (eval { require LWP::Simple }) {
+        *get = \&LWP::Simple::get;
+        *mirror = \&LWP::Simple::mirror;
+    } elsif (my $wget = which 'wget') {
+        *get = sub ($) {
+            my $uri = shift;
+            open my $fh, "$wget $uri -O - |" or die "wget $uri: $!";
+            local $/;
+            <$fh>;
+        };
+        *mirror = sub ($$) {
+            my($uri, $path) = @_;
+            `$wget $uri -O $path`;
+        };
+    }
+    # TODO curl
+
+    if (my $tar = which 'tar'){
+        *untar = sub {
+            my($tarfile) = @_;
+            my $suf = $tarfile =~ /bz2$/ ? 'j' : 'z';
+            system "$tar xvf$suf $tarfile";
+            my @files = `$tar tf$suf $tarfile`;
+            if (@files) {
+                $files[0] =~ s{^(.+)/[^/]+$}{$1};
+                chomp $files[0];
+                return $files[0];
+            } else {
+                return undef;
+            }
+        }
+    } elsif (eval { require Archive::Tar }) { # uses too much memory!
+        *untar = sub {
+            my $t = Archive::Tar->new($_[0]);
+            my $root = ($t->list_files)[0];
+            $t->extract;
+            return -d $root ? $root : undef;
+        };
+    }
+}
+
+### Inline stripped Parse::CPAN::Meta
+# Copyright: Adam Kennedy
+package Parse::CPAN::Meta;
+use Carp 'croak';
+# Printable characters for escapes
+my %UNESCAPES = (
+	z => "\x00", a => "\x07", t    => "\x09",
+	n => "\x0a", v => "\x0b", f    => "\x0c",
+	r => "\x0d", e => "\x1b", '\\' => '\\',
+);
+# Create an object from a file
+sub LoadFile ($) {
+	# Check the file
+	my $file = shift;
+	croak('You did not specify a file name')            unless $file;
+	croak( "File '$file' does not exist" )              unless -e $file;
+	croak( "'$file' is a directory, not a file" )       unless -f _;
+	croak( "Insufficient permissions to read '$file'" ) unless -r _;
+
+	# Slurp in the file
+	local $/ = undef;
+	local *CFG;
+	unless ( open( CFG, $file ) ) {
+		croak("Failed to open file '$file': $!");
+	}
+	my $yaml = <CFG>;
+	unless ( close(CFG) ) {
+		croak("Failed to close file '$file': $!");
+	}
+
+	# Hand off to the actual parser
+	Load( $yaml );
+}
+
+# Parse a document from a string.
+# Doing checks on $_[0] prevents us having to do a string copy.
+sub Load ($) {
+	my $string = $_[0];
+	unless ( defined $string ) {
+		croak("Did not provide a string to load");
+	}
+
+	# Byte order marks
+	if ( $string =~ /^(?:\376\377|\377\376|\377\376\0\0|\0\0\376\377)/ ) {
+		croak("Stream has a non UTF-8 Unicode Byte Order Mark");
+	} else {
+		# Strip UTF-8 bom if found, we'll just ignore it
+		$string =~ s/^\357\273\277//;
+	}
+
+	# Check for some special cases
+	return () unless length $string;
+	unless ( $string =~ /[\012\015]+\z/ ) {
+		croak("Stream does not end with newline character");
+	}
+
+	# Split the file into lines
+	my @lines = grep { ! /^\s*(?:\#.*)?\z/ }
+	            split /(?:\015{1,2}\012|\015|\012)/, $string;
+
+	# Strip the initial YAML header
+	@lines and $lines[0] =~ /^\%YAML[: ][\d\.]+.*\z/ and shift @lines;
+
+	# A nibbling parser
+	my @documents = ();
+	while ( @lines ) {
+		# Do we have a document header?
+		if ( $lines[0] =~ /^---\s*(?:(.+)\s*)?\z/ ) {
+			# Handle scalar documents
+			shift @lines;
+			if ( defined $1 and $1 !~ /^(?:\#.+|\%YAML[: ][\d\.]+)\z/ ) {
+				push @documents, _scalar( "$1", [ undef ], \@lines );
+				next;
+			}
+		}
+
+		if ( ! @lines or $lines[0] =~ /^(?:---|\.\.\.)/ ) {
+			# A naked document
+			push @documents, undef;
+			while ( @lines and $lines[0] !~ /^---/ ) {
+				shift @lines;
+			}
+
+		} elsif ( $lines[0] =~ /^\s*\-/ ) {
+			# An array at the root
+			my $document = [ ];
+			push @documents, $document;
+			_array( $document, [ 0 ], \@lines );
+
+		} elsif ( $lines[0] =~ /^(\s*)\S/ ) {
+			# A hash at the root
+			my $document = { };
+			push @documents, $document;
+			_hash( $document, [ length($1) ], \@lines );
+
+		} else {
+			croak("Parse::CPAN::Meta failed to classify line '$lines[0]'");
+		}
+	}
+
+	if ( wantarray ) {
+		return @documents;
+	} else {
+		return $documents[-1];
+	}
+}
+
+# Deparse a scalar string to the actual scalar
+sub _scalar ($$$) {
+	my ($string, $indent, $lines) = @_;
+
+	# Trim trailing whitespace
+	$string =~ s/\s*\z//;
+
+	# Explitic null/undef
+	return undef if $string eq '~';
+
+	# Quotes
+	if ( $string =~ /^\'(.*?)\'\z/ ) {
+		return '' unless defined $1;
+		$string = $1;
+		$string =~ s/\'\'/\'/g;
+		return $string;
+	}
+	if ( $string =~ /^\"((?:\\.|[^\"])*)\"\z/ ) {
+		# Reusing the variable is a little ugly,
+		# but avoids a new variable and a string copy.
+		$string = $1;
+		$string =~ s/\\"/"/g;
+		$string =~ s/\\([never\\fartz]|x([0-9a-fA-F]{2}))/(length($1)>1)?pack("H2",$2):$UNESCAPES{$1}/gex;
+		return $string;
+	}
+
+	# Special cases
+	if ( $string =~ /^[\'\"!&]/ ) {
+		croak("Parse::CPAN::Meta does not support a feature in line '$lines->[0]'");
+	}
+	return {} if $string eq '{}';
+	return [] if $string eq '[]';
+
+	# Regular unquoted string
+	return $string unless $string =~ /^[>|]/;
+
+	# Error
+	croak("Parse::CPAN::Meta failed to find multi-line scalar content") unless @$lines;
+
+	# Check the indent depth
+	$lines->[0]   =~ /^(\s*)/;
+	$indent->[-1] = length("$1");
+	if ( defined $indent->[-2] and $indent->[-1] <= $indent->[-2] ) {
+		croak("Parse::CPAN::Meta found bad indenting in line '$lines->[0]'");
+	}
+
+	# Pull the lines
+	my @multiline = ();
+	while ( @$lines ) {
+		$lines->[0] =~ /^(\s*)/;
+		last unless length($1) >= $indent->[-1];
+		push @multiline, substr(shift(@$lines), length($1));
+	}
+
+	my $j = (substr($string, 0, 1) eq '>') ? ' ' : "\n";
+	my $t = (substr($string, 1, 1) eq '-') ? ''  : "\n";
+	return join( $j, @multiline ) . $t;
+}
+
+# Parse an array
+sub _array ($$$) {
+	my ($array, $indent, $lines) = @_;
+
+	while ( @$lines ) {
+		# Check for a new document
+		if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
+			while ( @$lines and $lines->[0] !~ /^---/ ) {
+				shift @$lines;
+			}
+			return 1;
+		}
+
+		# Check the indent level
+		$lines->[0] =~ /^(\s*)/;
+		if ( length($1) < $indent->[-1] ) {
+			return 1;
+		} elsif ( length($1) > $indent->[-1] ) {
+			croak("Parse::CPAN::Meta found bad indenting in line '$lines->[0]'");
+		}
+
+		if ( $lines->[0] =~ /^(\s*\-\s+)[^\'\"]\S*\s*:(?:\s+|$)/ ) {
+			# Inline nested hash
+			my $indent2 = length("$1");
+			$lines->[0] =~ s/-/ /;
+			push @$array, { };
+			_hash( $array->[-1], [ @$indent, $indent2 ], $lines );
+
+		} elsif ( $lines->[0] =~ /^\s*\-(\s*)(.+?)\s*\z/ ) {
+			# Array entry with a value
+			shift @$lines;
+			push @$array, _scalar( "$2", [ @$indent, undef ], $lines );
+
+		} elsif ( $lines->[0] =~ /^\s*\-\s*\z/ ) {
+			shift @$lines;
+			unless ( @$lines ) {
+				push @$array, undef;
+				return 1;
+			}
+			if ( $lines->[0] =~ /^(\s*)\-/ ) {
+				my $indent2 = length("$1");
+				if ( $indent->[-1] == $indent2 ) {
+					# Null array entry
+					push @$array, undef;
+				} else {
+					# Naked indenter
+					push @$array, [ ];
+					_array( $array->[-1], [ @$indent, $indent2 ], $lines );
+				}
+
+			} elsif ( $lines->[0] =~ /^(\s*)\S/ ) {
+				push @$array, { };
+				_hash( $array->[-1], [ @$indent, length("$1") ], $lines );
+
+			} else {
+				croak("Parse::CPAN::Meta failed to classify line '$lines->[0]'");
+			}
+
+		} elsif ( defined $indent->[-2] and $indent->[-1] == $indent->[-2] ) {
+			# This is probably a structure like the following...
+			# ---
+			# foo:
+			# - list
+			# bar: value
+			#
+			# ... so lets return and let the hash parser handle it
+			return 1;
+
+		} else {
+			croak("Parse::CPAN::Meta failed to classify line '$lines->[0]'");
+		}
+	}
+
+	return 1;
+}
+
+# Parse an array
+sub _hash ($$$) {
+	my ($hash, $indent, $lines) = @_;
+
+	while ( @$lines ) {
+		# Check for a new document
+		if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
+			while ( @$lines and $lines->[0] !~ /^---/ ) {
+				shift @$lines;
+			}
+			return 1;
+		}
+
+		# Check the indent level
+		$lines->[0] =~ /^(\s*)/;
+		if ( length($1) < $indent->[-1] ) {
+			return 1;
+		} elsif ( length($1) > $indent->[-1] ) {
+			croak("Parse::CPAN::Meta found bad indenting in line '$lines->[0]'");
+		}
+
+		# Get the key
+		unless ( $lines->[0] =~ s/^\s*([^\'\" ][^\n]*?)\s*:(\s+|$)// ) {
+			if ( $lines->[0] =~ /^\s*[?\'\"]/ ) {
+				croak("Parse::CPAN::Meta does not support a feature in line '$lines->[0]'");
+			}
+			croak("Parse::CPAN::Meta failed to classify line '$lines->[0]'");
+		}
+		my $key = $1;
+
+		# Do we have a value?
+		if ( length $lines->[0] ) {
+			# Yes
+			$hash->{$key} = _scalar( shift(@$lines), [ @$indent, undef ], $lines );
+		} else {
+			# An indent
+			shift @$lines;
+			unless ( @$lines ) {
+				$hash->{$key} = undef;
+				return 1;
+			}
+			if ( $lines->[0] =~ /^(\s*)-/ ) {
+				$hash->{$key} = [];
+				_array( $hash->{$key}, [ @$indent, length($1) ], $lines );
+			} elsif ( $lines->[0] =~ /^(\s*)./ ) {
+				my $indent2 = length("$1");
+				if ( $indent->[-1] >= $indent2 ) {
+					# Null hash entry
+					$hash->{$key} = undef;
+				} else {
+					$hash->{$key} = {};
+					_hash( $hash->{$key}, [ @$indent, length($1) ], $lines );
+				}
+			}
+		}
+	}
+
+	return 1;
+}
+
+package App::cpanminus;
+
+__END__
+
+=head1 NAME
+
+cpanminus - get, unpack, build and install modules from CPAN
+
+=head1 SYNOPSIS
+
+    cpanm Module
+
+Run C<cpan -h> for more options.
+
+=head1 DESCRIPTION
+
+cpanminus is a script to get, unpack, build and install modules from CPAN.
+
+Its catch? Deps-free, zero-conf, standalone ~200 LOC script
+(i.e. hackable) and requires only 10MB RAM. See below for its cons.
+
+=head1 INSTALLATION
+
+Grab the file from L<http://bit.ly/cpanm>, chmod +x, put it into your
+PATH. Adjust shebang if needed.
+
+=head1 DEPENDENCIES
+
+perl 5.8 or later (Actually I believe it works with pre 5.8 too but
+haven't tested).
+
+=over 4
+
+=item *
+
+LWP or 'wget' to get files over HTTP.
+
+=item *
+
+'tar' executable or Archive::Tar to unpack files.
+
+=item *
+
+C compiler, if you want to build XS modules.
+
+=back
+
+And optionally:
+
+=over 4
+
+=item *
+
+make, if you want to more reliably install MakeMaker based modules
+
+=item *
+
+Module::Build (core in 5.10) if you want to install MakeMaker based modules without 'make'
+
+=back
+
+=head1 QUESTIONS
+
+=head2 Should I really use this?
+
+No. Use CPAN or CPANPLUS.
+
+=head2 WTF? What's the point?
+
+OK, the first motivation was this: CPAN shell gets OOM (or swaps
+heavily and gets really slow) on Slicehost/linode's most affordable
+plan with only 256MB RAM. Should I pay more to install perl modules
+from CPAN? I don't think so.
+
+Yes, I know there are tools like CPAN::SQLite that can fix that
+problem (and yes I use it on my Macbook Pro!) but installing it and
+its 14 non-core dependencies without CPAN shell (because CPAN shell
+doesn't work) feels like yak shaving.
+
+So, imagine you don't have CPAN or CPANPLUS. What you're going to do
+is to search the module on the CPAN search site, download a tarball,
+unpack it and then run C<perl Makefile.PL> (or C<perl Build.PL>) and
+then C<make install> (or C<./Build install>). If the module has
+dependencies you probably have to recurively resolve those
+dependencies by hand before doing so.
+
+This script just automates that.
+
+=head2 Zero-conf? How does this module get/parse/update the CPAN index?
+
+It scrapes the site L<http://search.cpan.org/>. Yes, it's horrible and
+fragile.
+
+Fetched files are unpacked in C<~/.cpanm> but you can configure with
+C<CPANMINUS_HOME> environment variable.
+
+=head2 Are you on drugs?
+
+Yes, I think my brain has been damaged since I looked at PyPI, gemcutter, pip and rip.
+
+=head2 Where does this install modules to?
+
+It installs to wherever ExtUtils::MakeMaker and Module::Build are
+configured to (i.e. via C<PERL_MM_OPT> and C<MODULEBUILDRC>). So if
+you use local::lib then it installs to your local perl5
+directory. Otherwise it installs to siteperl directory, so you might
+need to run C<cpanm> command as root, or run with C<--sudo> option to
+auto sudo when running the install command.
+
+=head2 Does this really work?
+
+I tested installing MojoMojo, KiokuDB, Catalyst, Jifty and Plack using
+cpanminus and the installations including dependencies were mostly
+successful. So multiplies of I<half of CPAN> behave really nicely and
+appear to work.
+
+However, there are some distributions that will miserably fail,
+because of the nasty edge cases (funky archive formats, naughty
+tarball that extracts to the current directory, META.yml that is
+outdatd, META.yml that is not really YAML, circular dependencies etc.)
+while CPAN and CPANPLUS can handle them.
+
+=head2 Quick Install?
+
+    env PERL_MM_USE_DEFAULT=1 cpanm --notest Module
+
+Oh, don't do that. It's too useful.
+
+=head2 So you're ignoring the CPAN toolchain ecosystem with this?
+
+No, that's not my intention. This tiny script actually respects and
+plays nice with all the toolchain ecosystem that has been developed
+for years, such as: L<Module::Build>, L<Module::Install>,
+L<ExtUtils::MakeMaker> and L<local::lib>. It just provides an
+alternative to (but B<NOT> a replacement for) L<CPAN> or L<CPANPLUS>,
+so that it doesn't require any configuration, any dependencies and has
+no bootstrap problems.
+
+The thing is, I've learned that often for less experienced users, or
+even really experienced users who knows how to shoot in their feet,
+setting up a CPAN toolchain I<in the right way> feels like just
+another yak to shave when all they want to do is just to quickstart
+writing perl code by installing CPAN modules. cpanminus is a super
+tiny shaver to eliminate the big yak really quickly in that case, and
+does nothing else.
+
+=head2 Should I really use this?
+
+No. Use CPAN or CPANPLUS.
+
+=head1 COPYRIGHT
+
+Copyright 2010- Tatsuhiko Miyagawa
+
+L<Parse::CPAN::Meta>, included in this script, is Copyright 2006-2009 Adam Kennedy
+
+=head1 LICENSE
+
+Same as Perl.
+
+=head1 AUTHORS
+
+Tatsuhiko Miyagawa, Goro Fuji, Kazuhiro Osawa, Tokuhiro Matsuno, Ken-ichi Ishigaki, Ian Wells
+
+=head1 SEE ALSO
+
+L<CPAN> L<CPANPLUS>
+
+=cut
