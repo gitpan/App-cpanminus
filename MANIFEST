@@ -3,4 +3,5 @@ cpanm
 Makefile.PL
 MANIFEST			This list of files
 README.md
+lib/App/cpanminus.pm
 META.yml                                 Module meta-data (added by MakeMaker)
