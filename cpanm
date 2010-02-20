@@ -8,8 +8,7 @@ use Fatal qw(chdir);
 use File::Spec;
 use Getopt::Long;
 
-use vars qw($VERSION);
-$VERSION = "0.05";
+our $VERSION = "0.06";
 
 my($notest, $force, $sudo, $help, $version);
 
@@ -50,6 +49,7 @@ sub mirror($$);
 sub untar;
 sub which;
 
+my $quote = $^O eq 'MSWin32' ? q/"/ : q/'/;
 my $make = which $Config{make};
 
 init_tools();
@@ -94,7 +94,6 @@ unless (@ARGV) {
 }
 
 my %seen;
-my $quote = $^O eq 'MSWin32' ? q/"/ : q/'/;
 
 for my $module (@ARGV) {
     install_module($module);
@@ -149,7 +148,17 @@ sub fetch_module {
     diag "Fetching $uri ...\n";
 
     my $name = basename $uri;
-    mirror($uri, $name);
+
+    my $cancelled;
+    eval {
+        local $SIG{INT} = sub { $cancelled = 1; die "SIGINT\n" };
+        mirror($uri, $name);
+    };
+
+    if ($cancelled) {
+        diag "Download cancelled.\n";
+        return;
+    }
 
     unless (-e $name) {
         diag "Failed to download $uri\n";
@@ -265,7 +274,7 @@ sub build_stuff {
 
     if (-e 'Makefile') {
         diag "Finding PREREQ from Makefile ...\n";
-        open my $mf, "<", 'Makefile';
+        open my $mf, "Makefile";
         while (<$mf>) {
             if (/^\#\s+PREREQ_PM => ({.*?})/) {
                 no strict; # WTF bareword keys
@@ -677,7 +686,7 @@ __END__
 
 =head1 NAME
 
-cpanminus - get, unpack, build and install modules from CPAN
+App::cpanminus - get, unpack, build and install modules from CPAN
 
 =head1 SYNOPSIS
 
