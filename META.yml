@@ -1,9 +1,9 @@
 --- #YAML:1.0
 name:               App-cpanminus
-version:            0.08
+version:            0.09
 abstract:           Get, unpack, build and install modules from CPAN.
 author:  []
-license:            unknown
+license:            perl
 distribution_type:  module
 configure_requires:
     ExtUtils::MakeMaker:  0

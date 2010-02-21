@@ -11,7 +11,7 @@ use constant WIN32 => $^O eq 'MSWin32';
 
 our $VERSION = "0.08";
 
-my($Base, %seen, $notest, $installdeps, $force, $sudo, $quote, $make, $quiet, $log);
+my($Base, %seen, $notest, $installdeps, $force, $sudo, $quote, $make, $verbose, $log);
 
 main();
 
@@ -35,12 +35,14 @@ sub setup_home {
     $Base = $ENV{CPANMINUS_HOME} || "$ENV{HOME}/.cpanm";
     mkdir $Base, 0777 unless -e $Base;
 
-    $Base = File::Spec->catfile($Base, "build-" . time . ".$$");
-    mkdir $Base, 0777;
+    my $build_dir = "build-" . time . ".$$";
 
-    $log = File::Spec->catfile($Base, "cpanm.log");
+    $log = File::Spec->catfile($Base, "build.log");
     open my $out, ">$log" or die "$log: $!";
-    print $out "Beginning a new cpanminus installation: ", scalar(localtime), "\n";
+    print $out "Beginning a new cpanminus installation: build direcotry is $build_dir\n";
+
+    $Base = File::Spec->catfile($Base, $build_dir);
+    mkdir $Base, 0777;
 }
 
 sub parse_options {
@@ -54,9 +56,12 @@ sub parse_options {
         'h|help'   => \$help,
         'i|install' => sub {},
         'installdeps' => \$installdeps,
-        'v|version' => \$version,
-        'q|quiet'   => sub { $quiet = 1; $ENV{PERL_MM_USE_DEFAULT} = 1 },
+        'V|version' => \$version,
+        'v|verbose' => \$verbose,
+        'q|quiet'   => sub { }, # now default: just ignore
     );
+
+    $ENV{PERL_MM_USE_DEFAULT} = 1 unless $verbose;
 
     help(0)   if $help;
     version() if $version;
@@ -69,9 +74,9 @@ sub version {
 
 sub help {
     print <<USAGE;
-Usage: cpanm [--quiet] [--force] [--notest] [--sudo] Module
+Usage: cpanm [--verbose] [--force] [--notest] [--sudo] Module
 
-  -q,--quiet     Turns off (but logs) verbose build log
+  -v,--verbose   Turns on chatty output (required when you install Task:: modules)
   -f,--force     force install
   -n,--notest    Do not run unit tests
   -S,--sudo      sudo to run install commands
@@ -88,8 +93,17 @@ Examples:
   # specify the version
   cpanm MIYAGAWA/Plack-0.99_05.tar.gz
 
-  # install from the current directory, just like `cpan .`
+  # install from an URL
+  cpan http://backpan.perl.org/authors/id/L/LD/LDS/CGI.pm-3.20.tar.gz
+
+  # install Task:: modlues (You need -v to answer questions)
+  cpanm -v Task::Kensho
+
+  # install from local directory, just like `cpan .`
   cpanm .
+
+  # install from a local file
+  cpanm ~/dists/MyCompany-Enterprise-1.00.tar.gz
 
 USAGE
 
@@ -112,7 +126,7 @@ sub diag {
 }
 
 sub chat {
-    print STDERR @_ unless $quiet;
+    print STDERR @_ if $verbose;
     _log(@_);
 }
 
@@ -124,7 +138,7 @@ sub _log {
 sub run($) {
     my $cmd = shift;
 
-    if ($quiet) {
+    unless ($verbose) {
         $cmd .= WIN32 ? ">> $log" : ">> $log 2>&1";
     }
 
@@ -158,11 +172,11 @@ sub install_module {
     my $dir = fetch_module($module);
 
     unless ($dir) {
-        diag "Can't locate module $module\n";
+        diag "! Couldn't find module or a distribution $module\n";
         return;
     }
 
-    chat "Entering $dir ...\n";
+    chat "Entering $dir...\n";
     _chdir $Base;
     _chdir $dir;
 
@@ -184,30 +198,41 @@ sub fetch_module {
     }
 
     _chdir $Base;
-    diag "Fetching $uri ...\n";
+    diag "Fetching $uri\n";
 
     my $name = basename $uri;
 
     my $cancelled;
-    eval {
-        local $SIG{INT} = sub { $cancelled = 1; die "SIGINT\n" };
-        mirror($uri, $name);
+    my $fetch = sub {
+        eval {
+            local $SIG{INT} = sub { $cancelled = 1; die "SIGINT\n" };
+            mirror($uri, $name);
+            return $name if -e $name;
+            return;
+        };
     };
 
+    my($try, $file);
+    while ($try++ < 3) {
+        $file = $fetch->();
+        last if $cancelled or $file;
+        diag "Download $uri failed. Retrying ...\n";
+    }
+
     if ($cancelled) {
-        diag "Download cancelled.\n";
+        diag "! Download cancelled.\n";
         return;
     }
 
-    unless (-e $name) {
-        diag "Failed to download $uri\n";
+    unless ($file) {
+        diag "! Failed to download $uri\n";
         return;
     }
 
-    diag "Unpacking $name ...\n";
-    my $dir = untar $name;
+    chat "Unpacking $file...\n";
+    my $dir = untar $file;
     unless ($dir) {
-        diag "Failed to unpack $name: no directory\n";
+        diag "! Failed to unpack $name: no directory\n";
         return;
     }
 
@@ -257,7 +282,7 @@ sub install_deps {
     my @install;
     while (my($mod, $ver) = each %deps) {
         next if $mod eq 'perl' or $mod eq 'Config';
-        chat "Checking if you have $mod $ver ... ";
+        chat "Checking if you have $mod $ver... ";
         $ver = '' if $ver == 0;
         my $test = `$^X -e ${quote}eval q{use $mod $ver (); print q{OK:}, q/$mod/->VERSION};print \$\@ if \$\@${quote}`;
         if ($test =~ s/^\s*OK://) {
@@ -271,7 +296,7 @@ sub install_deps {
     }
 
     if (@install) {
-        diag "Found dependencies: ", join(", ", @install), "\n";
+        diag "==> Found dependencies: ", join(", ", @install), "\n";
     }
 
     for my $mod (@install) {
@@ -286,7 +311,7 @@ sub build_stuff {
     my($module, $dir, $is_dep) = @_;
 
     if (-e 'META.yml') {
-        chat "Checking configure dependencies from META.yml ...\n";
+        chat "Checking configure dependencies from META.yml...\n";
         my $meta = parse_meta('META.yml');
         my %deps = %{$meta->{configure_requires} || {}};
 
@@ -303,11 +328,11 @@ sub build_stuff {
         run "$^X Makefile.PL";
     }
 
-    my %deps;
+    my(%deps, $meta);
     my($metayml) = grep -e $_, qw( MYMETA.yml META.yml );
     if ($metayml) {
-        chat "Checking dependencies from $metayml ...\n";
-        my $meta = parse_meta($metayml);
+        chat "Checking dependencies from $metayml...\n";
+        $meta = parse_meta($metayml);
         %deps = (%{$meta->{requires} || {}});
         unless ($notest) {
             %deps = (%deps, %{$meta->{build_requires} || {}}, %{$meta->{test_requires} || {}});
@@ -315,7 +340,7 @@ sub build_stuff {
     }
 
     if (-e 'Makefile') {
-        chat "Finding PREREQ from Makefile ...\n";
+        chat "Finding PREREQ from Makefile...\n";
         open my $mf, "Makefile";
         while (<$mf>) {
             if (/^\#\s+PREREQ_PM => ({.*?})/) {
@@ -330,19 +355,23 @@ sub build_stuff {
     install_deps($dir, %deps);
 
     if ($installdeps && !$is_dep) {
-        diag "Install dependencies for $module. Finishing.\n";
+        diag "<== Installed dependencies for $module. Finishing.\n";
         return 1;
     }
 
     unless ($make or -e "Build") {
-        diag "Oops, you don't have make. Trying to build a stub Build file for you. Hope this works!\n";
-        eval {
-            require Module::Build;
-            Module::Build->new(module_name => $module)->create_build_script;
-        };
+        diag "! Oops, you don't have make. Trying to build a stub Build file for you. Hope this works!\n";
+        {
+            open my $mb, ">Build.PL";
+            print $mb "require Module::Build;Module::Build->new(module_name => '$module',";
+            print $mb "dist_name => '$meta->{name}', dist_version => '$meta->{version}'" if $meta;
+            print $mb ")->create_build_script;";
+        }
+
+        run "$^X Build.PL";
     }
 
-    diag "Building ", ($notest ? "" : "and testing "), "$module ...\n";
+    diag "Building ", ($notest ? "" : "and testing "), "$dir for $module...\n";
 
     my $installed;
     if (-e 'Build') {
@@ -356,7 +385,7 @@ sub build_stuff {
         install "$make install" &&
         $installed++;
     } else {
-        diag "Sorry, I don't know how to build $dir\n";
+        diag "! Sorry, I don't know how to build $dir\n";
         return;
     }
 
@@ -364,7 +393,7 @@ sub build_stuff {
         diag "$module installed successfully.\n";
         return 1;
     } else {
-        diag "Installing $module failed. See $log for details.\n";
+        diag "! Installing $module failed. See $log for details.\n";
         return;
     }
 }
@@ -413,18 +442,20 @@ sub init_tools {
         *untar = sub {
             my($tarfile) = @_;
 
-            my $xf = "xf" . ($quiet ? '' : 'v');
+            my $xf = "xf" . ($verbose ? 'v' : '');
             my $ar = $tarfile =~ /bz2$/ ? 'j' : 'z';
-            system "$tar $xf$ar $tarfile";
 
-            my @files = `$tar tf$ar $tarfile`;
-            if (@files) {
-                $files[0] =~ s{^(.+)/[^/]+$}{$1};
-                chomp $files[0];
-                return $files[0];
-            } else {
-                return undef;
-            }
+            my($root, @others) = `$tar tf$ar $tarfile`
+                or return undef;
+
+            chomp $root;
+            $root =~ s{^(.+)/[^/]*$}{$1};
+
+            system "$tar $xf$ar $tarfile";
+            return $root if -d $root;
+
+            diag "Bad archive: $tarfile\n";
+            return undef;
         }
     } elsif (eval { require Archive::Tar }) { # uses too much memory!
         *untar = sub {
@@ -761,8 +792,8 @@ Run C<cpanm -h> for more options.
 
 cpanminus is a script to get, unpack, build and install modules from CPAN.
 
-Its catch? Deps-free, zero-conf, standalone ~200 LOC script
-(i.e. hackable) and requires less than 10MB RAM. See below for its cons.
+Its catch? Deps-free, zero-conf, standalone ~350 LOC script
+(i.e. hackable) and requires 8MB of RAM. See below for its cons.
 
 =head1 INSTALLATION
 
@@ -912,7 +943,7 @@ Patches contributed by: Goro Fuji, Kazuhiro Osawa, Tokuhiro Matsuno,
 Kenichi Ishigaki, Ian Wells, Pedro Melo.
 
 Feedbacks sent by: Jesse Vincent, David Golden, Chris Williams, Matt S
-Trout, Adam Kennedy.
+Trout, Adam Kennedy, J. Shirley, Chris Prather, Jesse Luehrs.
 
 =head1 NO WARRANTY
 
