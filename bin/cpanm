@@ -1,346 +1,712 @@
 #!perl
+my $quote = $^O eq 'MSWin32' ? q/"/ : q/'/;
+
+unless (caller) {
+    my $app = App::cpanminus::script->new;
+    $app->parse_options(@ARGV);
+    $app->doit;
+}
+
 package App::cpanminus::script;
 use strict;
 use Config;
-use Cwd;
-use File::Basename qw(basename);
-use Fatal qw(chdir);
-use File::Spec;
-use Getopt::Long;
+use Cwd ();
+use File::Basename ();
+use File::Spec ();
+use File::Copy ();
+use Getopt::Long ();
+
 use constant WIN32 => $^O eq 'MSWin32';
+use constant PLUGIN_API_VERSION => 0.1;
 
-our $VERSION = "0.08";
-
-my($Base, %seen, $notest, $installdeps, $force, $sudo, $quote, $make, $verbose, $log);
-
-main();
-
-sub main {
-    parse_options();
-    setup_home();
-    sanity_check();
-
-    $quote = WIN32 ? q/"/ : q/'/;
-    $make  = which($Config{make});
-
-    init_tools();
-
-    help(1) unless @ARGV;
-    for my $module (@ARGV) {
-        install_module($module);
-    }
+our $VERSION;BEGIN{
+$VERSION = "0.99_01";
 }
+$VERSION = eval $VERSION;
 
-sub setup_home {
-    $Base = $ENV{CPANMINUS_HOME} || "$ENV{HOME}/.cpanm";
-    mkdir $Base, 0777 unless -e $Base;
+sub new {
+    my $class = shift;
 
-    my $build_dir = "build-" . time . ".$$";
-
-    $log = File::Spec->catfile($Base, "build.log");
-    open my $out, ">$log" or die "$log: $!";
-    print $out "Beginning a new cpanminus installation: build direcotry is $build_dir\n";
-
-    $Base = File::Spec->catfile($Base, $build_dir);
-    mkdir $Base, 0777;
+    bless {
+        home => File::Spec->catfile($ENV{HOME}, ".cpanm"),
+        cmd  => 'install',
+        seen => {},
+        notest => undef,
+        installdeps => undef,
+        force => undef,
+        sudo => undef,
+        make  => undef,
+        verbose => undef,
+        interactive => undef,
+        log => undef,
+        mirrors => [],
+        perl => $^X,
+        argv => undef,
+        hooks => {},
+        plugins => [],
+        configure_timeout => 60,
+        test_timeout => 60 * 10,
+        @_,
+    }, $class;
 }
 
 sub parse_options {
-    my($help, $version);
+    my $self = shift;
+    local @ARGV = @_;
 
     Getopt::Long::Configure("bundling");
-    GetOptions(
-        'f|force'  => \$force,
-        'n|notest' => \$notest,
-        'S|sudo'   => \$sudo,
-        'h|help'   => \$help,
-        'i|install' => sub {},
-        'installdeps' => \$installdeps,
-        'V|version' => \$version,
-        'v|verbose' => \$verbose,
-        'q|quiet'   => sub { }, # now default: just ignore
+    Getopt::Long::GetOptions(
+        'f|force'  => \$self->{force},
+        'n|notest' => \$self->{notest},
+        'S|sudo'   => \$self->{sudo},
+        'v|verbose' => sub { $self->{verbose} = $self->{interactive} = 1 },
+        'q|quiet'   => sub {},
+        'h|help'    => sub { $self->{action} = 'help' },
+        'V|version' => sub { $self->{action} = 'version' },
+        'perl'      => \$self->{perl},
+        'recent'    => sub { $self->{action} = 'show_recent' },
+        'list-plugins' => sub { $self->{action} = 'list_plugins' },
+        'installdeps' => \$self->{installdeps},
+        'interactive' => \$self->{interactive},
+        'i|install' => sub { $self->{cmd} = 'install' },
+        'look'      => sub { $self->{cmd} = 'look' },
+        'info'      => sub { $self->{cmd} = 'info' },
+        'self-upgrade' => sub { $self->{cmd} = 'install'; $self->{argv} = [ 'App::cpanminus' ] },
+        'disable-plugins' => \$self->{disable_plugins},
     );
 
-    $ENV{PERL_MM_USE_DEFAULT} = 1 unless $verbose;
+    $self->{argv} ||= \@ARGV;
+}
 
-    help(0)   if $help;
-    version() if $version;
+sub doit {
+    my $self = shift;
+
+    $self->setup_home;
+    $self->load_plugins;
+    $self->sanity_check;
+
+    $self->{make} = Util::which($Config{make});
+
+    Util::init_tools($self);
+
+    $self->configure_mirrors;
+
+    if (my $action = $self->{action}) {
+        $self->$action() and return;
+    }
+
+    $self->help(1) unless @{$self->{argv}};
+
+    for my $module (@{$self->{argv}}) {
+        $self->install_module($module);
+    }
+
+    $self->run_hooks(finalize => {});
+}
+
+sub guard(&) {
+    my $cb = shift;
+    bless $cb, 'Util::Guard';
+}
+
+sub setup_home {
+    my $self = shift;
+
+    $self->{home} = $ENV{CPANMINUS_HOME} if $ENV{CPANMINUS_HOME};
+    mkdir $self->{home}, 0777 unless -e $self->{home};
+
+    for my $dir (qw( plugins work )) {
+        my $sub = File::Spec->catfile($self->{home}, $dir);
+        unless (-e $sub) {
+            mkdir $sub, 0777 or die "$dir: $!";
+        }
+    }
+
+    $self->{base} = File::Spec->catfile($self->{home}, "work", time . ".$$");
+    mkdir $self->{base}, 0777 or die "$self->{base}: $!";
+
+    my $link = File::Spec->catfile($self->{home}, 'latest-build');
+    eval { unlink $link; symlink $self->{base}, $link };
+
+    $self->{log} = File::Spec->catfile($self->{home}, "build.log");
+    $self->{at_exit} = guard { File::Copy::copy($self->{log}, File::Spec->catfile($self->{base}, 'build.log')) };
+
+    open my $out, ">$self->{log}" or die "$self->{log}: $!";
+    print $out "cpanm (App::cpanminus) $VERSION on perl $] built for $Config{archname}\n";
+    print $out "Work directory is $self->{base}\n";
+
+    $self->{plugin_dir} = File::Spec->catfile($self->{home}, "plugins");
+}
+
+sub register_core_hooks {
+    my $self = shift;
+
+    $self->hook('core', search_module => sub {
+        my $args = shift;
+        push @{$args->{uris}}, sub {
+            $self->chat("Searching $args->{module} on search.cpan.org ...\n");
+            my $html = Util::get("http://search.cpan.org/perldoc?$args->{module}");
+            $html =~ m!Download:.*<a href="/CPAN/authors/id/(.*?)">.*?</a>!
+                and return $self->cpan_uri($1);
+            $self->diag("! Finding $args->{module} on search.cpan.org failed.\n");
+            return;
+        };
+    });
+
+    $self->hook('core', show_recent => sub {
+        my $args = shift;
+
+        $self->chat("Fetching recent feed from search.cpan.org ...\n");
+        my $feed = Util::get("http://search.cpan.org/uploads.rdf");
+
+        my @dists;
+        while ($feed =~ m!<link>http://search\.cpan\.org/~([a-z_\-0-9]+)/(.*?)/</link>!g) {
+            my($pause_id, $dist) = (uc $1, $2);
+            push @dists, substr($pause_id, 0, 1) . "/" . substr($pause_id, 0, 2) . "/" . $pause_id . "/$dist.tar.gz";
+        }
+
+        return \@dists;
+    });
+}
+
+sub load_plugins {
+    my $self = shift;
+
+    $self->_load_plugins;
+    $self->register_core_hooks;
+
+    for my $hook (keys %{$self->{hooks}}) {
+        $self->{hooks}->{$hook} = [ sort { $a->[0] <=> $b->[0] } @{$self->{hooks}->{$hook}} ];
+    }
+
+    $self->run_hooks(init => {});
+}
+
+sub _load_plugins {
+    my $self = shift;
+    return if $self->{disable_plugins};
+    return unless $self->{plugin_dir} && -e $self->{plugin_dir};
+
+    opendir my $dh, $self->{plugin_dir} or return;
+    my @plugins;
+    while (my $e = readdir $dh) {
+        my $f = File::Spec->catfile($self->{plugin_dir}, $e);
+        next unless -f $f && $e =~ /^[A-Za-z0-9_]+$/ && $e ne 'README';
+        push @plugins, [ $f, $e ];
+    }
+
+    for my $plugin (sort { $a->[1] <=> $b->[1] } @plugins) {
+        $self->load_plugin(@$plugin);
+    }
+}
+
+sub load_plugin {
+    my($self, $file, $name) = @_;
+
+    # TODO remove this once plugin API is official
+    unless ($ENV{CPANMINUS_DEV}) {
+        $self->chat("! Found plugin $file but CPANMINUS_DEV is not set. Skipping.\n");
+        return;
+    }
+
+    $self->chat("Loading plugin $file\n");
+
+    my $plugin = { name => $name, file => $file };
+    my @attr   = qw( name description author version api_version synopsis );
+    my $dsl    = join "\n", map "sub $_ { \$plugin->{$_} = shift }", @attr;
+
+    (my $package = $file) =~ s/[^a-zA-Z0-9_]/_/g;
+    my $code = do { open my $io, "<$file"; local $/; <$io> };
+
+    my @hooks;
+    eval "package App::cpanplus::plugin::$package;\n".
+        "use strict;\n$dsl\n" .
+        "sub hook { push \@hooks, [\@_] };\n$code";
+
+    if ($plugin->{api_version} < PLUGIN_API_VERSION) {
+        $self->diag("! $plugin->{name} plugin API version is outdated ($plugin->{api_version}) and needs an update.\n");
+        return;
+    }
+
+    for my $hook (@hooks) {
+        $self->hook($plugin->{name}, @$hook);
+    }
+
+    $self->diag("! Loading plugin $file faield: $@") if $@;
+
+    push @{$self->{plugins}}, $plugin;
+}
+
+sub hook {
+    my $cb = pop;
+    my($self, $name, $hook, $order) = @_;
+    $order = 50 unless defined $order;
+    push @{$self->{hooks}->{$hook}}, [ $order, $cb, $name ];
+}
+
+sub run_hook {
+    my($self, $hook, $args) = @_;
+    $self->run_hooks($hook, $args, 1);
+}
+
+sub run_hooks {
+    my($self, $hook, $args, $first) = @_;
+
+    my $res;
+    for my $plugin (@{$self->{hooks}->{$hook} || []}) {
+        $res = eval { $plugin->[1]->({ %$args, app => $self }) };
+        $self->chat("Running hook '$plugin->[2]' error: $@") if $@;
+        last if $res && $first;
+    }
+
+    return $res;
 }
 
 sub version {
     print "cpanm (App::cpanminus) version $VERSION\n";
-    exit 0;
+    return 1;
 }
 
 sub help {
-    print <<USAGE;
-Usage: cpanm [--verbose] [--force] [--notest] [--sudo] Module
+    my $self = shift;
+    my $how  = $_[0] ? sub { die @_ } : sub { print @_ };
+    $how->(<<USAGE);
+Usage: cpanm [options] Module [...]
 
-  -v,--verbose   Turns on chatty output (required when you install Task:: modules)
-  -f,--force     force install
-  -n,--notest    Do not run unit tests
-  -S,--sudo      sudo to run install commands
-  --installdeps  Only install dependencies
+Options:
+  -v,--verbose       Turns on chatty output
+  --interactive      Turns on interactive configure (required for Task:: modules)
+  -f,--force         force install
+  -n,--notest        Do not run unit tests
+  -S,--sudo          sudo to run install commands
+  --installdeps      Only install dependencies
+  --disable-plugins  Disable plugin loading
+
+Commands:
+  --self-upgrade     upgrades itself
+  --look             Download the tarball and open the directory with your shell
+  --info             Displays distribution info on CPAN
+  --recent           Show recently updated modules
 
 Examples:
 
   # install CGI
   cpanm CGI
 
-  # force install MojoMojo and its deps
-  cpanm -f MojoMojo
-
   # specify the version
   cpanm MIYAGAWA/Plack-0.99_05.tar.gz
 
   # install from an URL
-  cpan http://backpan.perl.org/authors/id/L/LD/LDS/CGI.pm-3.20.tar.gz
+  cpanm http://backpan.perl.org/authors/id/L/LD/LDS/CGI.pm-3.20.tar.gz
 
-  # install Task:: modlues (You need -v to answer questions)
-  cpanm -v Task::Kensho
+  # install Task:: modlues (You need --interactive or -v to answer questions)
+  cpanm --interactive Task::Kensho
 
   # install from local directory, just like `cpan .`
   cpanm .
+
+  # install all the dependencies for the current directory
+  cpanm --installdeps .
 
   # install from a local file
   cpanm ~/dists/MyCompany-Enterprise-1.00.tar.gz
 
 USAGE
 
-    exit $_[0];
+    return 1;
 }
 
 sub sanity_check {
-    unless ($ENV{PERL_MM_OPT} or $ENV{MODULEBUILDRC} or -w $Config{installsitelib} or $sudo) {
+    my $self = shift;
+    unless ($ENV{PERL_MM_OPT} or $ENV{MODULEBUILDRC} or -w $Config{installsitelib} or $self->{sudo}) {
         die "Can't write to $Config{installsitelib}: Run me as root or with --sudo option.\n";
     }
 }
 
-sub get($);
-sub mirror($$);
-sub untar;
-
 sub diag {
+    my $self = shift;
     print STDERR @_;
-    _log(@_);
+    $self->log(@_);
 }
 
 sub chat {
-    print STDERR @_ if $verbose;
-    _log(@_);
+    my $self = shift;
+    print STDERR @_ if $self->{verbose};
+    $self->log(@_);
 }
 
-sub _log {
-    open my $out, ">>$log";
+sub log {
+    my $self = shift;
+    open my $out, ">>$self->{log}";
     print $out @_;
 }
 
-sub run($) {
-    my $cmd = shift;
-
-    unless ($verbose) {
-        $cmd .= WIN32 ? ">> $log" : ">> $log 2>&1";
+sub run {
+    my($self, $cmd) = @_;
+    unless ($self->{verbose}) {
+        $cmd .= " >> " . Util::quote($self->{log}) . " 2>&1";
     }
-
     !system $cmd;
 }
 
-sub test($) {
-    my $cmd = shift;
-    return 1 if $notest;
-    return run($cmd) || $force;
+sub run_exec {
+    my($self, $cmd) = @_;
+    unless ($self->{verbose}) {
+        $cmd .= " >> " . Util::quote($self->{log}) . " 2>&1";
+    }
+    exec $cmd;
+    return;
 }
 
-sub install($) {
-    my $cmd = shift;
-    $cmd = "sudo $cmd" if $sudo;
-    run($cmd);
+sub run_timeout {
+    my($self, $cmd, $timeout) = @_;
+    return $self->run($cmd) if WIN32 || $self->{verbose};
+
+    my $pid = fork;
+    if ($pid) {
+        eval {
+            local $SIG{ALRM} = sub { die "alarm\n" };
+            alarm $timeout;
+            waitpid $pid, 0;
+            alarm 0;
+        };
+        if ($@ && $@ eq "alarm\n") {
+            $self->diag("Timed out (> ${timeout}s). Use --verbose to retry. ");
+            local $SIG{TERM} = 'IGNORE';
+            kill TERM => 0;
+            waitpid $pid, 0;
+            return;
+        }
+        return !$?;
+    } elsif ($pid == 0) {
+        $self->run_exec($cmd);
+    } else {
+        $self->chat("! fork failed: falling back to system()\n");
+        $self->run($cmd);
+    }
 }
 
-sub _chdir {
-    chdir(File::Spec->canonpath($_[0]));
+sub configure {
+    my($self, $cmd) = @_;
+
+    # trick AutoInstall
+    local $ENV{PERL5_CPAN_IS_RUNNING} = 1;
+
+    my $use_default = !$self->{interactive};
+    local $ENV{PERL_MM_USE_DEFAULT} = $use_default;
+    local $ENV{AUTOMATED_TESTING}   = $use_default;
+
+    local $self->{verbose} = $self->{interactive};
+    $self->run_timeout($cmd, $self->{configure_timeout});
+}
+
+sub test {
+    my($self, $cmd) = @_;
+    return 1 if $self->{notest};
+    return $self->run_timeout($cmd,  $self->{test_timeout}) || $self->{force};
+}
+
+sub install {
+    my($self, $cmd) = @_;
+    $cmd = "sudo $cmd" if $self->{sudo};
+    $self->run($cmd);
+}
+
+sub chdir {
+    my $self = shift;
+    chdir(File::Spec->canonpath($_[0])) or die "$_[0]: $!";
+}
+
+sub configure_mirrors {
+    my $self = shift;
+
+    my @mirrors;
+    $self->run_hook(configure_mirrors => { mirrors => \@mirrors });
+
+    @mirrors = ('http://search.cpan.org/CPAN') unless @mirrors;
+    $self->{mirrors} = \@mirrors;
+}
+
+sub show_recent {
+    my $self = shift;
+
+    my $dists = $self->run_hook(show_recent => {});
+    for my $dist (@$dists) {
+        print $dist, "\n";
+    }
+
+    return 1;
+}
+
+sub list_plugins {
+    my $self = shift;
+
+    for my $plugin (@{$self->{plugins}}) {
+        print "$plugin->{name} - $plugin->{description}\n";
+    }
+
+    return 1;
+}
+
+sub self_upgrade {
+    my $self = shift;
+    $self->{argv} = [ 'App::cpanminus' ];
+    return; # continue
 }
 
 sub install_module {
-    my($module, $is_dep) = @_;
+    my($self, $module, $is_dep) = @_;
 
-    if ($seen{$module}++) {
-        diag "Already tried $module. Skipping\n";
+    if ($self->{seen}{$module}++) {
+        $self->diag("Already tried $module. Skipping.\n");
         return;
     }
 
-    my $dir = fetch_module($module);
+    my $dir = $self->fetch_module($module);
+
+    return if $self->{cmd} eq 'info';
 
     unless ($dir) {
-        diag "! Couldn't find module or a distribution $module\n";
+        $self->diag("! Couldn't find module or a distribution $module\n");
         return;
     }
 
-    chat "Entering $dir...\n";
-    _chdir $Base;
-    _chdir $dir;
+    if ($self->{seen}{$dir}++) {
+        $self->diag("Already built the distribution $dir. Skipping.\n");
+        return;
+    }
 
-    build_stuff($module, $dir, $is_dep)
+    $self->chat("Entering $dir\n");
+    $self->chdir($self->{base});
+    $self->chdir($dir);
+
+    if ($self->{cmd} eq 'look') {
+        $self->diag("Entering $dir with $ENV{SHELL}\n");
+        system $ENV{SHELL};
+    } else {
+        $self->build_stuff($module, $dir, $is_dep)
+    }
+}
+
+sub generator_cb {
+    my($self, $ref) = @_;
+
+    $ref = [ $ref ] unless ref $ref eq 'ARRAY';
+
+    my @stack;
+    return sub {
+        if (@stack) {
+            return shift @stack;
+        }
+
+        return -1 unless @$ref;
+        my $curr = (shift @$ref)->();
+        if (ref $curr eq 'ARRAY') {
+            @stack = @$curr;
+            return shift @stack;
+        } else {
+            return $curr;
+        }
+    };
 }
 
 sub fetch_module {
-    my $module = shift;
+    my($self, $module) = @_;
 
-    my($uri, $dir) = locate_archive($module);
+    my($uris, $local_dir) = $self->locate_dist($module);
 
-    return $dir if $dir;
+    return $local_dir if $local_dir;
+    return unless $uris;
 
-    return unless $uri;
+    my $iter = $self->generator_cb($uris);
 
-    if ($uri =~ m{/perl-5}){
-        diag "skip $uri\n";
-        return;
-    }
+    while (1) {
+        my $uri = $iter->();
+        last if $uri == -1;
+        next unless $uri;
 
-    _chdir $Base;
-    diag "Fetching $uri\n";
-
-    my $name = basename $uri;
-
-    my $cancelled;
-    my $fetch = sub {
-        eval {
-            local $SIG{INT} = sub { $cancelled = 1; die "SIGINT\n" };
-            mirror($uri, $name);
-            return $name if -e $name;
+        # Yikes this is dirty
+        if ($self->{cmd} eq 'info') {
+            $uri =~ s!.*authors/id/!!;
+            print $uri, "\n";
             return;
+        }
+
+        if ($uri =~ m{/perl-5}){
+            $self->diag("skip $uri\n");
+            next;
+        }
+
+        $self->chdir($self->{base});
+        $self->diag("Fetching $uri ... ");
+
+        my $name = File::Basename::basename $uri;
+
+        my $cancelled;
+        my $fetch = sub {
+            eval {
+                local $SIG{INT} = sub { $cancelled = 1; die "SIGINT\n" };
+                Util::mirror($uri, $name);
+                return $name if -e $name;
+                return;
+            };
         };
-    };
 
-    my($try, $file);
-    while ($try++ < 3) {
-        $file = $fetch->();
-        last if $cancelled or $file;
-        diag "Download $uri failed. Retrying ...\n";
+        my($try, $file);
+        while ($try++ < 3) {
+            $file = $fetch->();
+            last if $cancelled or $file;
+            $self->diag("FAIL\nDownload $uri failed. Retrying ... ");
+        }
+
+        if ($cancelled) {
+            $self->diag("\n! Download cancelled.\n");
+            return;
+        }
+
+        unless ($file) {
+            $self->diag("FAIL\n! Failed to download $uri\n");
+            next;
+        }
+
+        $self->diag("OK\n");
+        $self->chat("Unpacking $file\n");
+
+        my $dir = Util::untar($file);
+        unless ($dir) {
+            $self->diag("! Failed to unpack $name: no directory\n");
+            next;
+        }
+
+        return $dir;
     }
-
-    if ($cancelled) {
-        diag "! Download cancelled.\n";
-        return;
-    }
-
-    unless ($file) {
-        diag "! Failed to download $uri\n";
-        return;
-    }
-
-    chat "Unpacking $file...\n";
-    my $dir = untar $file;
-    unless ($dir) {
-        diag "! Failed to unpack $name: no directory\n";
-        return;
-    }
-
-    return $dir;
 }
 
-sub locate_archive {
-    my $module = shift;
+sub locate_dist {
+    my($self, $module) = @_;
+
+    if (my $located = $self->run_hook(locate_dist => { module => $module })) {
+        return ref $located eq 'ARRAY' ? @$located :
+               ref $located eq 'CODE'  ? $located  : sub { $located };
+    }
 
     # URL
-    return $module if $module =~ /^(ftp|https?|file):/;
+    return sub { $module } if $module =~ /^(ftp|https?|file):/;
 
     # Directory
     return undef, Cwd::abs_path($module) if -e $module && -d _;
 
     # File
-    return "file://" . Cwd::abs_path($module) if -f $module;
+    return sub { "file://" . Cwd::abs_path($module) } if -f $module;
+
+    # cpan URI
+    $module =~ s!^cpan:///distfile/!!;
 
     # PAUSEID/foo
     $module =~ s!^([A-Z]{3,})/!substr($1, 0, 1)."/".substr($1, 0, 2) ."/" . $1 . "/"!e;
 
     # CPAN tarball
-    return cpan_uri($module) if $module =~ m!/!;
+    return sub { $self->cpan_uri($module) } if $module =~ m!^[A-Z]/[A-Z]{2}/!;
 
     # Module name -- search.cpan.org
-    return search_module($module);
+    return $self->search_module($module);
 }
 
 sub cpan_uri {
-    my $module = shift;
-    return "http://search.cpan.org/CPAN/authors/id/$module";
+    my($self, $dist) = @_;
+
+    my @mirrors = @{$self->{mirrors}};
+    my @urls    = map "$_/authors/id/$dist", @mirrors;
+
+    return wantarray ? @urls : $urls[int(rand($#urls))];
 }
 
 sub search_module {
-    my $module = shift;
+    my($self, $module) = @_;
 
-    my $html = get("http://search.cpan.org/perldoc?$module");
-    $html =~ m!Download:.*<a href="/CPAN/authors/id/(.*?)">.*?</a>!
-        and return cpan_uri($1);
+    my @cbs;
+    $self->run_hooks(search_module => { module => $module, uris => \@cbs });
 
-    return;
+    return \@cbs;
 }
 
 sub install_deps {
-    my($dir, %deps) = @_;
+    my($self, $dir, %deps) = @_;
 
     my @install;
     while (my($mod, $ver) = each %deps) {
         next if $mod eq 'perl' or $mod eq 'Config';
-        chat "Checking if you have $mod $ver... ";
+        $self->chat("Checking if you have $mod $ver ... ");
         $ver = '' if $ver == 0;
-        my $test = `$^X -e ${quote}eval q{use $mod $ver (); print q{OK:}, q/$mod/->VERSION};print \$\@ if \$\@${quote}`;
+        my $test = `$self->{perl} -e ${quote}eval q{use $mod $ver (); print q{OK:}, q/$mod/->VERSION};print \$\@ if \$\@${quote}`;
         if ($test =~ s/^\s*OK://) {
-            chat "Yes ($test)\n";
+            $self->chat("Yes ($test)\n");
         } elsif ($test =~ /^Can't locate|required--this is only version (\S+)/) {
-            chat "No ", ($1 ? "($1 < $ver)\n" : "\n");
+            $self->chat("No ", ($1 ? "($1 < $ver)\n" : "\n"));
             push @install, $mod;
         } else {
-            chat "Unknown ($test)\n";
+            $self->chat("Unknown ($test)\n");
         }
     }
 
     if (@install) {
-        diag "==> Found dependencies: ", join(", ", @install), "\n";
+        $self->diag("==> Found dependencies: ", join(", ", @install), "\n");
     }
 
     for my $mod (@install) {
-        install_module($mod, 1);
+        $self->install_module($mod, 1);
     }
 
-    _chdir $Base;
-    _chdir $dir;
+    $self->chdir($self->{base});
+    $self->chdir($dir);
 }
 
 sub build_stuff {
-    my($module, $dir, $is_dep) = @_;
+    my($self, $module, $dir, $is_dep) = @_;
+
+    my $fail;
+    $self->run_hooks(verify_dist => { module => $module, dir => $dir, fail => \$fail });
+
+    if ($fail && !$self->{force}) {
+        $self->diag("! Verifying the module $module failed. Skipping. (use --force to install)\n");
+        return;
+    }
 
     if (-e 'META.yml') {
-        chat "Checking configure dependencies from META.yml...\n";
-        my $meta = parse_meta('META.yml');
+        $self->chat("Checking configure dependencies from META.yml ...\n");
+        my $meta = Util::parse_meta('META.yml');
         my %deps = %{$meta->{configure_requires} || {}};
 
-        install_deps($dir, %deps);
+        $self->install_deps($dir, %deps);
     }
 
-    # trick AutoInstall
-    $ENV{PERL5_CPAN_IS_RUNNING} = 1;
-
-    if (-e 'Build.PL') {
-        run "$^X Build.PL";
-    } elsif (-e 'Makefile.PL') {
-        $ENV{X_MYMETA} = 'YAML';
-        run "$^X Makefile.PL";
+    my($use_module_build, $configured);
+    if (-e 'Makefile.PL') {
+        local $ENV{X_MYMETA} = 'YAML';
+        $self->configure("$self->{perl} Makefile.PL");
+        $configured = 1;
     }
 
-    my(%deps, $meta);
+    if ((!$self->{make} or !$configured) and -e 'Build.PL') {
+        $self->configure("$self->{perl} Build.PL");
+        $use_module_build = 1;
+        $configured = 1;
+    }
+
+    my %deps;
+    my $meta = {};
     my($metayml) = grep -e $_, qw( MYMETA.yml META.yml );
     if ($metayml) {
-        chat "Checking dependencies from $metayml...\n";
-        $meta = parse_meta($metayml);
+        $self->chat("Checking dependencies from $metayml ...\n");
+        $meta = Util::parse_meta($metayml);
         %deps = (%{$meta->{requires} || {}});
-        unless ($notest) {
+        unless ($self->{notest}) {
             %deps = (%deps, %{$meta->{build_requires} || {}}, %{$meta->{test_requires} || {}});
         }
     }
 
     if (-e 'Makefile') {
-        chat "Finding PREREQ from Makefile...\n";
+        $self->chat("Finding PREREQ from Makefile ...\n");
         open my $mf, "Makefile";
         while (<$mf>) {
             if (/^\#\s+PREREQ_PM => ({.*?})/) {
@@ -352,15 +718,18 @@ sub build_stuff {
         }
     }
 
-    install_deps($dir, %deps);
+    $self->run_hooks(find_deps => { deps => \%deps, module => $module, meta => $meta });
 
-    if ($installdeps && !$is_dep) {
-        diag "<== Installed dependencies for $module. Finishing.\n";
+    $self->install_deps($dir, %deps);
+
+    if ($self->{installdeps} && !$is_dep) {
+        $self->diag("<== Installed dependencies for $module. Finishing.\n");
         return 1;
     }
 
-    unless ($make or -e "Build") {
-        diag "! Oops, you don't have make. Trying to build a stub Build file for you. Hope this works!\n";
+    unless ($configured) {
+        $self->diag("! Oops, you don't have make or the dist didn't have Makefile.PL.\n");
+        $self->diag("! Trying to build a stub Build file for you. Hope this works!\n");
         {
             open my $mb, ">Build.PL";
             print $mb "require Module::Build;Module::Build->new(module_name => '$module',";
@@ -368,44 +737,60 @@ sub build_stuff {
             print $mb ")->create_build_script;";
         }
 
-        run "$^X Build.PL";
+        $self->configure("$self->{perl} Build.PL");
+        $use_module_build = 1;
     }
 
-    diag "Building ", ($notest ? "" : "and testing "), "$dir for $module...\n";
+    $self->diag("Building ", ($self->{notest} ? "" : "and testing "), "$dir for $module ... ");
 
     my $installed;
-    if (-e 'Build') {
-        run "$^X ./Build" &&
-        test "$^X ./Build test" &&
-        install "$^X ./Build install" &&
+    if ($use_module_build && -e 'Build' && -f _) {
+        $self->run("$self->{perl} ./Build") &&
+        $self->test("$self->{perl} ./Build test") &&
+        $self->install("$self->{perl} ./Build install") &&
         $installed++;
-    } elsif ($make && -e 'Makefile') {
-        run "$make" &&
-        test "$make test" &&
-        install "$make install" &&
+    } elsif ($self->{make} && -e 'Makefile') {
+        $self->run("$self->{make}") &&
+        $self->test("$self->{make} test") &&
+        $self->install("$self->{make} install") &&
         $installed++;
     } else {
-        diag "! Sorry, I don't know how to build $dir\n";
+        $self->diag("FAIL\n! Sorry, I don't know how to build $dir\n");
         return;
     }
 
     if ($installed) {
-        diag "$module installed successfully.\n";
+        $self->diag("OK\n$module installed successfully.\n");
+        $self->run_hooks(install_success => { module => $module, build_dir => $dir, meta => $meta });
         return 1;
     } else {
-        diag "! Installing $module failed. See $log for details.\n";
+        $self->diag("FAIL\n! Installing $module failed. See $self->{log} for details.\n");
+        $self->run_hooks(build_failure => { module => $module, build_dir => $dir, meta => $meta });
         return;
     }
+}
+
+package Util;
+
+use Config;
+sub get($);
+sub mirror($$);
+sub redirect;
+sub untar;
+
+sub quote {
+    my $stuff = shift;
+    $quote . $stuff . $quote;
 }
 
 sub which {
     my($name) = @_;
     my $exe_ext = $Config{_exe};
-    foreach my $dir(File::Spec->path){
+    foreach my $dir (File::Spec->path){
         my $fullpath = File::Spec->catfile($dir, $name);
         if (-x $fullpath || -x ($fullpath .= $exe_ext)){
             if ($fullpath =~ /\s/ && $fullpath !~ /^$quote/) {
-                $fullpath = "$quote$fullpath$quote"
+                $fullpath = Util::quote($fullpath);
             }
             return $fullpath;
         }
@@ -415,25 +800,41 @@ sub which {
 
 sub file_mirror {
     my($uri, $path) = @_;
-    require File::Copy;
     File::Copy::copy($uri, $path);
 }
 
 sub init_tools {
+    my $app = shift;
     if (eval { require LWP::Simple }) {
         *get = \&LWP::Simple::get;
         *mirror = \&LWP::Simple::mirror;
+        *redirect = sub {
+            my $ua = LWP::UserAgent->new(max_redirect => 1, env_proxy => 1);
+            my $res = $ua->simple_request(HTTP::Request->new(GET => $_[0]));
+            return $res->header('Location') if $res->is_redirect;
+            return;
+        };
     } elsif (my $wget = which 'wget') {
         *get = sub ($) {
             my $uri = shift;
-            open my $fh, "$wget $uri -O - |" or die "wget $uri: $!";
+            my $q = $app->{verbose} ? '' : '-q';
+            open my $fh, "$wget $uri $q -O - |" or die "wget $uri: $!";
             local $/;
             <$fh>;
         };
         *mirror = sub ($$) {
             my($uri, $path) = @_;
             return file_mirror($uri, $path) if $uri =~ s!^file:/+!/!;
-            system "$wget $uri -O $path";
+            my $q = $app->{verbose} ? '' : '-q';
+            system "$wget $uri $q -O $path";
+        };
+        *redirect = sub {
+            my $uri = shift;
+            my $out = `$wget --max-redirect=0 $uri 2>&1`;
+            if ($out =~ /^Location: (\S+)/) {
+                return $1;
+            }
+            return;
         };
     }
     # TODO curl
@@ -442,7 +843,7 @@ sub init_tools {
         *untar = sub {
             my($tarfile) = @_;
 
-            my $xf = "xf" . ($verbose ? 'v' : '');
+            my $xf = "xf" . ($app->{verbose} ? 'v' : '');
             my $ar = $tarfile =~ /bz2$/ ? 'j' : 'z';
 
             my($root, @others) = `$tar tf$ar $tarfile`
@@ -454,7 +855,7 @@ sub init_tools {
             system "$tar $xf$ar $tarfile";
             return $root if -d $root;
 
-            diag "Bad archive: $tarfile\n";
+            $app->diag("Bad archive: $tarfile\n");
             return undef;
         }
     } elsif (eval { require Archive::Tar }) { # uses too much memory!
@@ -471,6 +872,9 @@ sub parse_meta {
     my $file = shift;
     return eval { (Parse::CPAN::Meta::LoadFile($file))[0] } || {};
 }
+
+package Util::Guard;
+sub DESTROY { $_[0]->() }
 
 ### Inline stripped Parse::CPAN::Meta
 # Copyright: Adam Kennedy
@@ -785,6 +1189,11 @@ App::cpanminus - get, unpack, build and install modules from CPAN
 =head1 SYNOPSIS
 
     cpanm Module
+    cpanm MIYAGAWA/Plack-1.0000.tar.gz
+    cpanm ~/mydists/MyCompany-Framework-1.0.tar.gz
+    cpanm http://example.com/MyModule-0.1.tar.gz
+    cpanm http://github.com/miyagawa/Tatsumaki/tarball/master
+    cpanm --interactive Task::Kensho
 
 Run C<cpanm -h> for more options.
 
@@ -792,19 +1201,25 @@ Run C<cpanm -h> for more options.
 
 cpanminus is a script to get, unpack, build and install modules from CPAN.
 
-Its catch? Deps-free, zero-conf, standalone ~350 LOC script
-(i.e. hackable) and requires 8MB of RAM. See below for its cons.
+Its catch? Deps-free, zero-conf, standalone but maintainable and
+extensible with plugins. In the runtime it only requires 8MB of
+RAM.
 
 =head1 INSTALLATION
 
-  cpan> install App::cpanminus
+If you have git,
 
-Or,
+    git clone git://github.com/miyagawa/cpanminus.git
+    cd cpanminus
+    perl Makefile.PL
+    make install
 
-  cd ~/bin
-  wget http://bit.ly/cpanm
-  chmod +x cpanm
-  # edit shebang if you don't have /usr/bin/env
+Otherwise,
+
+    cd ~/bin
+    wget http://xrl.us/cpanm
+    chmod +x cpanm
+    # edit shebang if you don't have /usr/bin/env
 
 =head1 DEPENDENCIES
 
@@ -819,7 +1234,7 @@ LWP or 'wget' to get files over HTTP.
 
 =item *
 
-'tar' executable or Archive::Tar to unpack files.
+'tar' executable (if GNU tar, version 1.22 or later) or Archive::Tar to unpack files.
 
 =item *
 
@@ -841,91 +1256,146 @@ Module::Build (core in 5.10) if you want to install MakeMaker based modules with
 
 =back
 
+=head1 PLUGINS
+
+B<WARNING: plugin API is not stabled so this feature is turned off by
+default for now. To enable plugins you have to be savvy enough to look
+at the build.log or read the source code to see how :)>
+
+cpanminus core is a tiny 600 lines of code (with some embedded
+utilities and documents) but can be extended by writing
+plugins. Plugins are flat perl script that should be placed inside
+C<~/.cpanm/plugins>. See C<plugins/> directory in the git repository
+L<http://github.com/miyagawa/cpanminus> for the list of available and
+sample plugins.
+
 =head1 QUESTIONS
 
-=head2 Should I really use this?
-
-Probably not. You should use CPAN or CPANPLUS.
-
-=head2 What's the point?
+=head2 Another CPAN installer? What's the point?
 
 OK, the first motivation was this: CPAN shell gets OOM (or swaps
 heavily and gets really slow) on Slicehost/linode's most affordable
 plan with only 256MB RAM. Should I pay more to install perl modules
 from CPAN? I don't think so.
 
-Yes, I know there are tools like CPAN::SQLite that can fix that
-problem (and yes I use it on my Macbook Pro!) but installing it and
-its 14 non-core dependencies without CPAN shell (because CPAN shell
-doesn't work) feels like yak shaving.
+=head2 But why a new client?
+
+First of all, I don't have an intention to dis CPAN or CPANPLUS
+developers. Don't get me wrong. They're great tools and I've been
+using it for I<literally> years (Oh, you know how many modules I have
+on CPAN, right?) I really respect their efforts of maintaining the
+most important tools in the CPAN toolchain ecosystem.
+
+However, I've learned that for less experienced users (mostly from
+outside the Perl community), or even really experienced Perl
+developers who knows how to shoot in their feet, setting up the CPAN
+toolchain could often feel really yak shaving, especially when all
+they want to do is just install some modules and start writing some
+perl code.
+
+In particular, here are the few issues I've been observing:
+
+=over
+
+=item *
+
+Too many questions. No sane defaults.
+
+=item *
+
+Bootstrap problems. Nearly impossible to fix when newbies encounter this.
+
+=item *
+
+Noisy output by default.
+
+=item *
+
+Fetches and rebuilds indexes like every day and takes like a minute
+
+=item *
+
+... and hogs 200MB of memory and thrashes/OOMs on my 256MB VPS
+
+=back
+
+And cpanminus is designed to be very quiet (but logs all output to
+C<~/.cpanm/build.log>), pick whatever the sanest defaults as possible
+without asking any questions to I<just work>.
+
+Note that most of these problems with existing tools are rare, or are
+just overstated and might be already fixed issues, or can be
+configured to work nicer. For instance the latest CPAN.pm dev release
+has a much better FirstTime experience than previously.
+
+And I know there's a reason for them to have many options and
+questions, since they're meant to work everywhere for everybody.
+
+And yes, of course I should have contributed back to CPAN/CPANPLUS
+instead of writing a new client, but CPAN.pm is nearly impossible to
+maintain (that's why CPANPLUS was born, right?) and CPANPLUS is a huge
+beast for me to start working on.
+
+And yes, I think my brain has been damaged since I looked at PyPI,
+gemcutter, pip and rip. They're quite nice and I really wanted
+something as nice for CPAN which I love.
+
+=head2 How does this thing work?
 
 So, imagine you don't have CPAN or CPANPLUS. What you're going to do
 is to search the module on the CPAN search site, download a tarball,
-unpack it and then run C<perl Makefile.PL> (or C<perl Build.PL>) and
-then C<make install> (or C<./Build install>). If the module has
-dependencies you probably have to recurively resolve those
-dependencies by hand before doing so.
+unpack it and then run C<perl Makefile.PL> (or C<perl Build.PL>). If
+the module has dependencies you probably have to recurively resolve
+those dependencies by hand before doing so. And then run the unit
+tests and C<make install> (or C<./Build install>).
 
 This script just automates that.
 
 =head2 Zero-conf? How does this module get/parse/update the CPAN index?
 
 It scrapes the site L<http://search.cpan.org/>. Yes, it's horrible and
-fragile. I hope (and have talked to) QA/toolchain people building a
-queriable CPAN DB website so I can stop scraping.
+fragile. I hope (and have already talked to) QA/toolchain people for
+building a queriable CPAN DB website so I can stop scraping.
 
 Fetched files are unpacked in C<~/.cpanm> but you can configure with
 C<CPANMINUS_HOME> environment variable.
-
-=head2 Yet Another CPAN installer? Are you on drugs?
-
-Yes, I think my brain has been damaged since I looked at PyPI,
-gemcutter, pip and rip. They're quite nice.
 
 =head2 Where does this install modules to?
 
 It installs to wherever ExtUtils::MakeMaker and Module::Build are
 configured to (i.e. via C<PERL_MM_OPT> and C<MODULEBUILDRC>). So if
 you use local::lib then it installs to your local perl5
-directory. Otherwise it installs to siteperl directory, so you might
-need to run C<cpanm> command as root, or run with C<--sudo> option to
-auto sudo when running the install command.
+directory. Otherwise it installs to siteperl directory.
+
+cpanminus at a boot time checks whether you configured local::lib
+setup, or have the permission to install modules to the sitelib
+directory, and warns you otherwise so that you need to run C<cpanm>
+command as root, or run with C<--sudo> option to auto sudo when
+running the install command.
 
 =head2 Does this really work?
 
-I tested installing MojoMojo, KiokuDB, Catalyst, Jifty and Plack using
-cpanminus and the installations including dependencies were mostly
-successful. So multiplies of I<half of CPAN> behave really nicely and
-appear to work.
+I tested installing MojoMojo, Task::Kensho, KiokuDB, Catalyst, Jifty
+and Plack using cpanminus and the installations including dependencies
+were mostly successful. So multiplies of I<half of CPAN> behave really
+nicely and appear to work.
 
 However, there are some distributions that will miserably fail,
 because of the nasty edge cases (funky archive formats, naughty
 tarball that extracts to the current directory, META.yml that is
 outdated and cannot be resurrected, Bundle:: modules, circular
-dependencies etc.)  while CPAN and CPANPLUS can handle them.
+dependencies etc.) while CPAN and CPANPLUS can possibly handle them.
 
-=head2 So you're ignoring the CPAN toolchain ecosystem with this?
-
-Not really. This tiny script actually respects and plays nice with all
-the toolchain ecosystem that has been developed for years, such as:
-L<Module::Build>, L<Module::Install>, L<ExtUtils::MakeMaker> and
-L<local::lib>. It just provides an alternative to (but B<NOT> a
-replacement for) L<CPAN> or L<CPANPLUS>, so that it doesn't require
-any configuration, any dependencies and has no bootstrap problems.
-
-The thing is, I've learned that often for less experienced users, or
-even really experienced users who knows how to shoot in their feet,
-setting up a CPAN toolchain I<in the right way> feels like just
-another yak to shave when all they want to do is just to quickstart
-writing perl code by installing CPAN modules. cpanminus is a super
-tiny shaver to eliminate the big yak really quickly in that case, and
-does nothing else.
+Well in other words, cpanminus is aimed to work against 99% of modules
+on CPAN for 99% of people. It may not be perfect, but it should just
+work in most cases.
 
 =head2 That sounds fantastic. Should I switch to this from CPAN(PLUS)?
 
-While I think you should really use CPAN or CPANPLUS in the longer
-term, I'm happy if you like this software. And apparently, many people
-love (at least the idea of) this software :)
+If you've got CPAN or CPANPLUS working then you may keep using CPAN or
+CPANPLUS in the longer term, but I just hope this can be a quite handy
+alternative to them for people in other situations. And apparently,
+many people love (at least the idea of) this software :)
 
 =head1 COPYRIGHT
 
@@ -940,10 +1410,23 @@ Same as Perl.
 =head1 CREDITS
 
 Patches contributed by: Goro Fuji, Kazuhiro Osawa, Tokuhiro Matsuno,
-Kenichi Ishigaki, Ian Wells, Pedro Melo.
+Kenichi Ishigaki, Ian Wells, Pedro Melo, Masayoshi Sekimura and Matt S
+Trout.
 
-Feedbacks sent by: Jesse Vincent, David Golden, Chris Williams, Matt S
-Trout, Adam Kennedy, J. Shirley, Chris Prather, Jesse Luehrs.
+Feedbacks sent by: Jesse Vincent, David Golden, Chris Williams, Adam
+Kennedy, J. Shirley, Chris Prather, Jesse Luehrs, Marcus Ramberg,
+Shawn M Moore, chocolateboy, Ingy dot Net, Chirs Nehren and Jonathan
+Rockway and Leon Brocard.
+
+=head1 COMMUNITY
+
+=over 4
+
+=item L<http://github.com/miyagawa/cpanminus> - source code repository, issue tracker
+
+=item L<irc://irc.perl.org/#toolchain> - discussions about Perl toolchain. I'm there.
+
+=back
 
 =head1 NO WARRANTY
 
@@ -953,6 +1436,6 @@ arising from the use of the software.
 
 =head1 SEE ALSO
 
-L<CPAN> L<CPANPLUS>
+L<CPAN> L<CPANPLUS> L<pip>
 
 =cut
