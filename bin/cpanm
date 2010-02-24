@@ -20,7 +20,7 @@ use constant WIN32 => $^O eq 'MSWin32';
 use constant PLUGIN_API_VERSION => 0.1;
 
 our $VERSION;BEGIN{
-$VERSION = "0.99_02";
+$VERSION = "0.99_03";
 }
 $VERSION = eval $VERSION;
 
@@ -585,7 +585,7 @@ sub fetch_module {
         $self->diag("OK\n");
         $self->chat("Unpacking $file\n");
 
-        my $dir = Util::untar($file);
+        my $dir = $file =~ /\.zip/i ? Util::unzip($file) : Util::untar($file);
         unless ($dir) {
             $self->diag("! Failed to unpack $name: no directory\n");
             next;
@@ -790,6 +790,7 @@ sub get($);
 sub mirror($$);
 sub redirect;
 sub untar;
+sub unzip;
 
 sub quote {
     my $stuff = shift;
@@ -881,6 +882,44 @@ sub init_tools {
             my $t = Archive::Tar->new($_[0]);
             my $root = ($t->list_files)[0];
             $t->extract;
+            return -d $root ? $root : undef;
+        };
+    }
+    if (my $unzip = which 'unzip'){
+        *unzip = sub {
+            my($zipfile) = @_;
+
+            my $opt = $app->{verbose} ? '' : '-q';
+
+            my(undef, $root, @others) = `$unzip -t $zipfile`
+                or return undef;
+
+            chomp $root;
+            $root =~ s{^\s+testing:\s+(.+?)/\s+OK$}{$1};
+
+            system "$unzip $opt $zipfile";
+            return $root if -d $root;
+
+            $app->diag("Bad archive: [$root] $zipfile\n");
+            return undef;
+        }
+    } elsif (eval { require Archive::Zip }) {
+        *unzip = sub {
+            my($file) = @_;
+            my $zip = Archive::Zip->new();
+            my $status;
+            $status = $zip->read($file);
+            $app->diag("Read of file[$file] failed\n")
+                if $status != Archive::Zip::AZ_OK();
+            my @members = $zip->members();
+            my $root;
+            for my $member ( @members ) {
+                my $af = $member->fileName();
+                next if ($af =~ m!^(/|\.\./)!);
+                $root = $af unless $root;
+                $status = $member->extractToFileNamed( $af );
+                $app->diag("Extracting of file[$af] from zipfile[$file failed\n") if $status != Archive::Zip::AZ_OK();
+            }
             return -d $root ? $root : undef;
         };
     }
