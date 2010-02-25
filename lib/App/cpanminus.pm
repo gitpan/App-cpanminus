@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "0.99_03";
+our $VERSION = "0.99_04";
 
 =head1 NAME
 
@@ -149,9 +149,10 @@ And I know there's a reason for them to have many options and
 questions, since they're meant to work everywhere for everybody.
 
 And yes, of course I should have contributed back to CPAN/CPANPLUS
-instead of writing a new client, but CPAN.pm is nearly impossible to
-maintain (that's why CPANPLUS was born, right?) and CPANPLUS is a huge
-beast for me to start working on.
+instead of writing a new client, but CPAN.pm is nearly impossibler
+(for anyone other than andk or xdg) to maintain (that's why CPANPLUS
+was born, right?) and CPANPLUS is a huge beast for me to start working
+on.
 
 =head2 Are you on drugs?
 
@@ -164,7 +165,7 @@ something as nice for CPAN which I love.
 So, imagine you don't have CPAN or CPANPLUS. What you're going to do
 is to search the module on the CPAN search site, download a tarball,
 unpack it and then run C<perl Makefile.PL> (or C<perl Build.PL>). If
-the module has dependencies you probably have to recurively resolve
+the module has dependencies you probably have to recursively resolve
 those dependencies by hand before doing so. And then run the unit
 tests and C<make install> (or C<./Build install>).
 
@@ -179,7 +180,7 @@ building a queriable CPAN DB website so I can stop scraping.
 Fetched files are unpacked in C<~/.cpanm> but you can configure with
 C<PERL_CPANM_HOME> environment variable.
 
-=head2 Where does this install modules to?
+=head2 Where does this install modules to? Do I need a root access?
 
 It installs to wherever ExtUtils::MakeMaker and Module::Build are
 configured to (i.e. via C<PERL_MM_OPT> and C<MODULEBUILDRC>). So if
@@ -190,7 +191,9 @@ cpanminus at a boot time checks whether you configured local::lib
 setup, or have the permission to install modules to the sitelib
 directory, and warns you otherwise so that you need to run C<cpanm>
 command as root, or run with C<--sudo> option to auto sudo when
-running the install command.
+running the install command. Yes, it's already in the plan to
+automatically bootstraps L<local::lib> at the initial launch if you're
+non-root. I'm working on it with local::lib developers -- Stay tuned.
 
 =head2 Does this really work?
 
@@ -199,11 +202,46 @@ and Plack using cpanminus and the installations including dependencies
 were mostly successful. So multiplies of I<half of CPAN> behave really
 nicely and appear to work.
 
-However, there are some distributions that will miserably fail,
-because of the nasty edge cases (funky archive formats, naughty
-tarball that extracts to the current directory, META.yml that is
-outdated and cannot be resurrected, Bundle:: modules, circular
-dependencies etc.) while CPAN and CPANPLUS can possibly handle them.
+However, there might be some distributions that will miserably fail,
+because of the nasty edge case, a.k.a. bad distros. Here are some
+examples:
+
+=over 4
+
+=item *
+
+Packages uploaded to PAUSE in 90's and doesn't live under the standard
+C<authors/id/A/AA> directory hierarchy.
+
+=imte *
+
+C<Makefile.PL> or C<Build.PL> that asks you questions without using
+C<prompt> function. However cpanminus has a mechanism to kill those
+questions with a timeout, and you can always say C<--interactive> to
+make the configuration interactive.
+
+=item *
+
+Distributions that are not shipped with C<META.yml> file but requires
+some specific version of toolchain in the configuration time.
+
+=item *
+
+Distributions that tests SIGNATURE in the C<*.t> unit tests and has
+C<MANIFEST.SKIP> file in the distribution at the same time. Signature
+testing is for the security and running it in unit tests is too late
+since we run C<Makefile.PL> in the configuration time.
+
+cpanminus has C<verity_signature> plugin to verify the dist before
+configurations.
+
+=item *
+
+Distributions that has a C<META.yml> file that is encoded in YAML 1.1
+format using L<YAML::XS>. This will be eventually solved once we move
+to C<META.json>.
+
+=back
 
 Well in other words, cpanminus is aimed to work against 99% of modules
 on CPAN for 99% of people. It may not be perfect, but it should just
