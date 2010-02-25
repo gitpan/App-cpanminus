@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               App-cpanminus
-version:            0.99_04
+version:            0.99_05
 abstract:           Get, unpack, build and install modules from CPAN.
 author:  []
 license:            perl
@@ -12,7 +12,7 @@ build_requires:
 requires:
     ExtUtils::Install:    1.43
     ExtUtils::MakeMaker:  6.31
-    LWP:                  0
+    LWP:                  5.828
     Module::Build:        0.28
 no_index:
     directory:
