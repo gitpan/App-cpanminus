@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "0.99_06";
+our $VERSION = "0.99_07";
 
 =head1 NAME
 
@@ -26,12 +26,23 @@ it only requires 10MB of RAM.
 
 =head1 INSTALLATION
 
-If you have git,
+There are Debian package, RPM, FreeBSD ports and packages for other
+operation systems available. If you want to use the package maangement
+system, search for cpanminus and use the appropriate command to
+install. This makes it easy to install C<cpanm> to your system and
+later upgrade.
+
+If you want to build the latest from source,
 
     git clone git://github.com/miyagawa/cpanminus.git
     cd cpanminus
     perl Makefile.PL
-    make install
+    make install # or sudo make install if you're non root
+
+This will install C<cpanm> to your bin directory like
+C</usr/local/bin> (unless you configured C<INSTALL_BASE> with
+L<local::lib>), so you might need to sudo. Later you can say C<cpanm
+--self-upgrade --sudo> to upgrade to the latest version.
 
 Otherwise,
 
@@ -40,16 +51,15 @@ Otherwise,
     chmod +x cpanm
     # edit shebang if you don't have /usr/bin/env
 
+just works, but be sure to grab the new version manually when you
+upgrade (C<--self-upgrade> might not work).
+
 =head1 DEPENDENCIES
 
 perl 5.8 or later (Actually I believe it works with pre 5.8 too but
 haven't tested).
 
 =over 4
-
-=item *
-
-LWP or 'wget' to get files over HTTP.
 
 =item *
 
@@ -81,10 +91,14 @@ B<WARNING: plugin API is not stable so this feature is turned off by
 default for now. To enable plugins you have to be savvy enough to look
 at the build.log or read the source code to see how :)>
 
-cpanminus core is a tiny 600 lines of code (with some embedded
-utilities and documents) but can be extended by writing
-plugins. Plugins are flat perl script that should be placed inside
-C<~/.cpanm/plugins>. See C<plugins/> directory in the git repository
+cpanminus core is a compact and simple 1000 lines of code (with some
+embedded utilities and documents) but can be extended by writing
+plugins. Plugins are flat perl scripts that should be placed inside
+C<~/.cpanm/plugins>. You can copy (or symlink, if you're a developer)
+a plugin file to the directory to enable plugins, and delete the
+file to disable.
+
+See C<plugins/> directory in the git repository
 L<http://github.com/miyagawa/cpanminus> for the list of available and
 sample plugins.
 
@@ -213,7 +227,7 @@ examples:
 Packages uploaded to PAUSE in 90's and doesn't live under the standard
 C<authors/id/A/AA> directory hierarchy.
 
-=imte *
+=item *
 
 C<Makefile.PL> or C<Build.PL> that asks you questions without using
 C<prompt> function. However cpanminus has a mechanism to kill those
@@ -230,10 +244,8 @@ some specific version of toolchain in the configuration time.
 Distributions that tests SIGNATURE in the C<*.t> unit tests and has
 C<MANIFEST.SKIP> file in the distribution at the same time. Signature
 testing is for the security and running it in unit tests is too late
-since we run C<Makefile.PL> in the configuration time.
-
-cpanminus has C<verity_signature> plugin to verify the dist before
-configurations.
+since we run C<Makefile.PL> in the configuration time. cpanminus has
+C<verity_signature> plugin to verify the dist before configurations.
 
 =item *
 
@@ -243,22 +255,36 @@ to C<META.json>.
 
 =back
 
-Well in other words, cpanminus is aimed to work against 99% of modules
-on CPAN for 99% of people. It may not be perfect, but it should just
-work in most cases.
+Well in other words, cpanminus is aimed to work against 99.9% of
+modules on CPAN for 99.9% of people. It may not be perfect, but it
+should just work in most cases.
+
+If this tool doesn't work for your very rare environment, then I'm
+sorry, but you should use CPAN or CPANPLUS, or build and install
+modules manually.
 
 =head2 That sounds fantastic. Should I switch to this from CPAN(PLUS)?
 
-If you've got CPAN or CPANPLUS working then you may keep using CPAN or
-CPANPLUS in the longer term, but I just hope this can be a quite handy
-alternative to them for people in other situations. And apparently,
-many people love (at least the idea of) this software :)
+If you've got CPAN or CPANPLUS working then you may want to keep using
+CPAN or CPANPLUS in the longer term, but I just hope this can be a
+quite handy alternative to them for people in other situations. And
+apparently, many people love (at least the idea of) this software :)
 
 =head1 COPYRIGHT
 
 Copyright 2010- Tatsuhiko Miyagawa
 
-L<Parse::CPAN::Meta>, included in this script, is Copyright 2006-2009 Adam Kennedy
+The standalone executable contains the following modules embedded.
+
+=over 4
+
+=item L<Parse::CPAN::Meta> Copyright 2006-2009 Adam Kennedy
+
+=item L<local::lib> Copyright 2007-2009 Matt S Trout
+
+=item L<HTTP::Lite> Copyright 2000-2002 Roy Hopper, 2009 Adam Kennedy
+
+=back
 
 =head1 LICENSE
 
