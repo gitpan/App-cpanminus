@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "0.9923";
+our $VERSION = "0.99_24";
 
 =head1 NAME
 
@@ -279,6 +279,8 @@ The standalone executable contains the following modules embedded.
 =item L<local::lib> Copyright 2007-2009 Matt S Trout
 
 =item L<HTTP::Lite> Copyright 2000-2002 Roy Hopper, 2009 Adam Kennedy
+
+=item L<Module::Metadata> Copyright 2001-2006 Ken Williams. 2010 Matt S Trout
 
 =back
 
