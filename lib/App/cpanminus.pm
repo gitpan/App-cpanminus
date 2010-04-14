@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "0.999_03";
+our $VERSION = "0.9935";
 
 =head1 NAME
 
@@ -8,6 +8,11 @@ App::cpanminus - get, unpack, build and install modules from CPAN
 =head1 SYNOPSIS
 
     cpanm Module
+    cpanm MIYAGAWA/Plack-1.0000.tar.gz
+    cpanm ~/mydists/MyCompany-Framework-1.0.tar.gz
+    cpanm http://example.com/MyModule-0.1.tar.gz
+    cpanm http://github.com/miyagawa/Tatsumaki/tarball/master
+    cpanm --interactive Task::Kensho
 
 Run C<cpanm -h> for more options.
 
@@ -15,8 +20,9 @@ Run C<cpanm -h> for more options.
 
 cpanminus is a script to get, unpack, build and install modules from CPAN.
 
-Why? It's dependency free, requires zero configuration, and stands
-alone. When running, it requires only 10MB of RAM.
+Why? It's dependency free, requires zero configuration, and stands alone -- but
+it's maintainable and extensible with plugins and friendly to shell scripting.
+When running, it requires only 10MB of RAM.
 
 =head1 INSTALLATION
 
@@ -78,6 +84,22 @@ make, if you want to reliably install MakeMaker based modules
 Module::Build (core in 5.10) to install Build.PL based modules
 
 =back
+
+=head1 PLUGINS
+
+B<WARNING: plugin API is not stable so this feature is turned off by
+default for now. To enable plugins you have to be savvy enough to look
+at the build.log or read the source code to see how :)>
+
+The cpanminus core is a compact and simple 1000 lines of code (with some
+embedded utilities and documents) but can be extended by writing plugins.
+Plugins are flat perl scripts placed inside C<~/.cpanm/plugins>. You can copy
+(or symlink, if you're a developer) a plugin file to the directory to enable
+plugins.  Delete the file or symlink to disable it.
+
+See the C<plugins/> directory in the git repository
+L<http://github.com/miyagawa/cpanminus> for the list of available and
+sample plugins.
 
 =head1 QUESTIONS
 
@@ -182,7 +204,7 @@ cpanminus at a boot time checks whether you have configured local::lib, or have
 the permission to install modules to the sitelib directory.  If neither, it
 automatically sets up local::lib compatible installation path in a C<perl5>
 directory under your home directory. To avoid this, run the script as the root
-user, with C<--sudo> option or with C<--local-lib> option.
+user or with C<--sudo> option.
 
 This L<local::lib> automatic integration is still considered alpha and
 in the work -- more bootstrapping is under development. Stay tuned.
@@ -215,6 +237,14 @@ the configuration interactive.
 
 Distributions that do not shipped with C<META.yml> file but do require
 some specific version of toolchain for configuration.
+
+=item *
+
+Distributions that test a SIGNATURE in the C<*.t> unit tests and has
+C<MANIFEST.SKIP> file in the distribution at the same time. The intent of
+signature testing is to provide some degree of security, but running it in unit
+tests is too late as it occurs I<after> running C<Makefile.PL>.  cpanminus has
+a C<verify_signature> plugin to verify the dist before configurations.
 
 =item *
 
