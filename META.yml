@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               App-cpanminus
-version:            0.999_04
+version:            0.999_05
 abstract:           Get, unpack, build and install modules from CPAN.
 author:  []
 license:            perl
