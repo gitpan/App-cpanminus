@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.0015";
+  our $VERSION = "1.1000";
   
   =head1 NAME
   
@@ -336,7 +336,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.0015";
+  our $VERSION = "1.1000";
   $VERSION = eval $VERSION;
   
   my $quote = WIN32 ? q/"/ : q/'/;
@@ -358,6 +358,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           interactive => undef,
           log => undef,
           mirrors => [],
+          mirror_only => undef,
           perl => $^X,
           argv => [],
           local_lib => undef,
@@ -403,6 +404,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'l|local-lib=s' => sub { $self->{local_lib} = $self->maybe_abs($_[1]) },
           'L|local-lib-contained=s' => sub { $self->{local_lib} = $self->maybe_abs($_[1]); $self->{self_contained} = 1 },
           'mirror=s@' => $self->{mirrors},
+          'mirror-only!' => \$self->{mirror_only},
           'prompt!'   => \$self->{prompt},
           'installdeps' => \$self->{installdeps},
           'skip-installed!' => \$self->{skip_installed},
@@ -488,32 +490,81 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   sub fetch_meta {
       my($self, $dist) = @_;
   
-      my $meta_yml = $self->get("http://cpansearch.perl.org/src/$dist->{cpanid}/$dist->{distvname}/META.yml");
-      return $self->parse_meta_string($meta_yml);
+      unless ($self->{mirror_only}) {
+          my $meta_yml = $self->get("http://cpansearch.perl.org/src/$dist->{cpanid}/$dist->{distvname}/META.yml");
+          return $self->parse_meta_string($meta_yml);
+      }
+  
+      return undef;
   }
   
   sub search_module {
       my($self, $module) = @_;
   
-      $self->chat("Searching $module on cpanmetadb ...\n");
-      my $uri  = "http://cpanmetadb.appspot.com/v1.0/package/$module";
-      my $yaml = $self->get($uri);
-      my $meta = $self->parse_meta_string($yaml);
-      if ($meta->{distfile}) {
-          return $self->cpan_module($module, $meta->{distfile}, $meta->{version});
+      unless ($self->{mirror_only}) {
+          $self->chat("Searching $module on cpanmetadb ...\n");
+          my $uri  = "http://cpanmetadb.appspot.com/v1.0/package/$module";
+          my $yaml = $self->get($uri);
+          my $meta = $self->parse_meta_string($yaml);
+          if ($meta->{distfile}) {
+              return $self->cpan_module($module, $meta->{distfile}, $meta->{version});
+          }
+  
+          $self->diag_fail("Finding $module on cpanmetadb failed.");
+  
+          $self->chat("Searching $module on search.cpan.org ...\n");
+          my $uri  = "http://search.cpan.org/perldoc?$module";
+          my $html = $self->get($uri);
+          $html =~ m!<a href="/CPAN/authors/id/(.*?\.(?:tar\.gz|tgz|tar\.bz2|zip))">!
+              and return $self->cpan_module($module, $1);
+  
+          $self->diag_fail("Finding $module on search.cpan.org failed.");
       }
   
-      $self->diag_fail("Finding $module on cpanmetadb failed.");
+      for my $mirror (@{ $self->{mirrors} }) {
+          $self->chat("Searching $module on mirror $mirror ...\n");
+          my $name = '02packages.details.txt.gz';
+          my $uri  = "$mirror/modules/$name";
+          my $file = $self->source_for($mirror) . "/$name";
   
-      $self->chat("Searching $module on search.cpan.org ...\n");
-      my $uri  = "http://search.cpan.org/perldoc?$module";
-      my $html = $self->get($uri);
-      $html =~ m!<a href="/CPAN/authors/id/(.*?\.(?:tar\.gz|tgz|tar\.bz2|zip))">!
-          and return $self->cpan_module($module, $1);
+          unless ($self->{pkgs}{$uri}) {
+              $self->chat("Downloading index file $uri ...\n");
+              $self->mirror($uri, $file);
   
-      $self->diag_fail("Finding $module on search.cpan.org failed.");
+              local $/ = undef;
+              open my $fh,'<',$file;
+              $self->{pkgs}{$uri} = <$fh>;
+  
+              if (substr($self->{pkgs}{$uri},0,2) eq chr(0x1f).chr(0x8b)) {
+                  $self->chat("Uncompressing index file ...\n");
+  
+                  if (eval {require Compress::Zlib}) {
+                      open my $fh,'<',$file;
+                      $self->{pkgs}{$uri} = Compress::Zlib::memGunzip(<$fh>);
+                  } else {
+                      open my $fh, "gunzip -c $file |" or die "Cannot uncompress - please install gunzip or Compress::Zlib";
+                      $self->{pkgs}{$uri} = <$fh>;
+                  }
+              }
+          }
+  
+          $self->{pkgs}{$uri} =~ m!^\Q$module\E\s+[\w\.]+\s+(.*)!m
+              and return $self->cpan_module($module, $1);
+  
+          $self->diag_fail("Finding $module on mirror $mirror failed.");
+      }
   
       return;
+  }
+  
+  sub source_for {
+      my($self, $mirror) = @_;
+      $mirror =~ s/[^\w\.\-]+/%/g;
+  
+      my $dir = "$self->{home}/sources/$mirror";
+      File::Path::mkpath([ $dir ], 0, 0777);
+  
+      return $dir;
   }
   
   sub load_argv_from_fh {
@@ -560,6 +611,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
     --installdeps             Only install dependencies
     --reinstall               Reinstall the distribution even if you already have the latest version installed
     --mirror                  Specify the base URL for the mirror (e.g. http://cpan.cpantesters.org/)
+    --only-mirror             Use the mirror's index file instead of the CPAN Meta DB
     --prompt                  Prompt when configure/build/test fails
     -l,--local-lib            Specify the install base to install modules
     -L,--local-lib-contained  Specify the install base to install all non-core modules
@@ -947,6 +999,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           $self->{mirrors} = [ 'http://search.cpan.org/CPAN' ];
       }
       for (@{$self->{mirrors}}) {
+          s!^/!file:///!;
           s!/$!!;
       }
   }
@@ -5800,6 +5853,20 @@ can specify multiple mirror URLs by repeating the command line option.
 
 Defaults to C<http://search.cpan.org/CPAN> which is a geo location
 aware redirector.
+
+=item --mirror-only
+
+Download the mirror's 02packages.details.txt.gz index file instead of
+querying the CPAN Meta DB.
+
+Select this option if you are using a local mirror of CPAN, such as
+minicpan when you're offline, or your own CPAN index (a.k.a darkpan).
+
+B<Tip:> It might be useful if you name these mirror options with your
+shell aliases, like:
+
+  alias minicpanm='cpanm --mirror ~/minicpan --mirror-only'
+  alias darkpan='canm --mirror http://mycompany.example.com/DPAN --mirror-only'
 
 =item --prompt
 
