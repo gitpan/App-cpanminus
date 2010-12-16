@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "1.1005";
+our $VERSION = "1.1006";
 
 =head1 NAME
 
@@ -40,7 +40,7 @@ latest version.
 Otherwise,
 
     cd ~/bin
-    wget http://xrl.us/cpanm
+    curl -O http://xrl.us/cpanm
     chmod +x cpanm
     # edit shebang if you don't have /usr/bin/env
 
