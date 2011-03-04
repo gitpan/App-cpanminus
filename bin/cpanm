@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.30_06";
+  our $VERSION = "1.30_07";
   
   =head1 NAME
   
@@ -312,7 +312,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.30_06";
+  our $VERSION = "1.30_07";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -347,7 +347,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           uninstall_shadows => ($] < 5.012),
           skip_installed => 1,
           auto_cleanup => 7, # days
-          pod2man => undef,
+          pod2man => 1,
           @_,
       }, $class;
   }
@@ -379,7 +379,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'V|version' => sub { $self->{action} = 'show_version' },
           'perl=s'    => \$self->{perl},
           'l|local-lib=s' => sub { $self->{local_lib} = $self->maybe_abs($_[1]) },
-          'L|local-lib-contained=s' => sub { $self->{local_lib} = $self->maybe_abs($_[1]); $self->{self_contained} = 1 },
+          'L|local-lib-contained=s' => sub {
+              $self->{local_lib} = $self->maybe_abs($_[1]);
+              $self->{self_contained} = 1;
+              $self->{pod2man} = undef;
+          },
           'mirror=s@' => $self->{mirrors},
           'mirror-only!' => \$self->{mirror_only},
           'prompt!'   => \$self->{prompt},
@@ -6695,8 +6699,9 @@ directories.
 
 Generates man pages for executables (man1) and libraries (man3).
 
-Defaults to false, and you can say C<--no-pod2man> to override when
-it's set in the default options in C<PERL_CPANM_OPT>.
+Defaults to false (no man pages generated) if
+C<-L|--local-lib-contained> option is supplied. Otherwise, defaults to
+true, and you can disable it with C<--no-pod2man>.
 
 =item --lwp
 
