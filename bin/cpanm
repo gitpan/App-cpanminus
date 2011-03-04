@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.30_05";
+  our $VERSION = "1.30_06";
   
   =head1 NAME
   
@@ -312,7 +312,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.30_05";
+  our $VERSION = "1.30_06";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -347,6 +347,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           uninstall_shadows => ($] < 5.012),
           skip_installed => 1,
           auto_cleanup => 7, # days
+          pod2man => undef,
           @_,
       }, $class;
   }
@@ -395,6 +396,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'wget!'   => \$self->{try_wget},
           'curl!'   => \$self->{try_curl},
           'auto-cleanup=s' => \$self->{auto_cleanup},
+          'pod2man!' => \$self->{pod2man},
       );
   
       $self->{argv} = \@ARGV;
@@ -736,7 +738,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       open my $out, ">$self->{base}/DumpedINC.pm" or die $!;
       local $" = ",";
-      print $out <<EOF
+      print $out <<EOF;
   package DumpedINC;
   my \%exclude = map { \$_ => 1 } (@exclude_inc);
   sub import {
@@ -969,6 +971,12 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $use_default = !$self->{interactive};
       local $ENV{PERL_MM_USE_DEFAULT} = $use_default;
   
+      # skip man page generation
+      local $ENV{PERL_MM_OPT} = $ENV{PERL_MM_OPT};
+      unless ($self->{pod2man}) {
+          $ENV{PERL_MM_OPT} .= " INSTALLMAN1DIR=none INSTALLMAN3DIR=none";
+      }
+  
       local $self->{verbose} = $self->{verbose} || $self->{interactive};
       $self->run_timeout($cmd, $self->{configure_timeout});
   }
@@ -1091,6 +1099,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       $self->check_libs;
+      $self->setup_module_build_patch unless $self->{pod2man};
   
       if ($dist->{module}) {
           my($ok, $local) = $self->check_module($dist->{module}, $dist->{module_version} || 0);
@@ -1265,6 +1274,22 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       };
   }
   
+  sub setup_module_build_patch {
+      my $self = shift;
+  
+      open my $out, ">$self->{base}/ModuleBuildSkipMan.pm" or die $!;
+      print $out <<EOF;
+  package ModuleBuildSkipMan;
+  sub import {
+    use Module::Build;
+    no warnings qw'redefine';
+    sub Module::Build::Base::ACTION_manpages {}
+    sub Module::Build::Base::ACTION_docs     {}
+  }
+  1;
+  EOF
+  }
+  
   sub check_module {
       my($self, $mod, $want_ver) = @_;
   
@@ -1433,10 +1458,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       my $installed;
       if ($configure_state->{use_module_build} && -e 'Build' && -f _) {
+          my @switches = $self->{pod2man} ? () : ("-I$self->{base}", "-MModuleBuildSkipMan");
           $self->diag_progress("Building " . ($self->{notest} ? "" : "and testing ") . $distname);
-          $self->build([ $self->{perl}, "./Build" ], $distname) &&
+          $self->build([ $self->{perl}, @switches, "./Build" ], $distname) &&
           $self->test([ $self->{perl}, "./Build", "test" ], $distname) &&
-          $self->install([ $self->{perl}, "./Build", "install" ], [ "--uninst", 1 ]) &&
+          $self->install([ $self->{perl}, @switches, "./Build", "install" ], [ "--uninst", 1 ]) &&
           $installed++;
       } elsif ($self->{make} && -e 'Makefile') {
           $self->diag_progress("Building " . ($self->{notest} ? "" : "and testing ") . $distname);
@@ -1481,6 +1507,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       @switches = ("-I$self->{base}", "-MDumpedINC") if $self->{self_contained};
       local $ENV{PERL5LIB} = ''                      if $self->{self_contained};
   
+      my @mb_switches = @switches;
+      unless ($self->{pod2man}) {
+          unshift @mb_switches, ("-I$self->{base}", "-MModuleBuildSkipMan");
+      }
+  
       my $state = {};
   
       my $try_eumm = sub {
@@ -1502,7 +1533,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $try_mb = sub {
           if (-e 'Build.PL') {
               $self->chat("Running Build.PL\n");
-              if ($self->configure([ $self->{perl}, @switches, "Build.PL" ])) {
+              if ($self->configure([ $self->{perl}, @mb_switches, "Build.PL" ])) {
                   $state->{configured_ok} = -e 'Build' && -f _;
               }
               $state->{use_module_build}++;
@@ -6659,6 +6690,13 @@ cleaned up in one week.
 
 You can set the value to C<0> to make cpan never cleanup those
 directories.
+
+=item --pod2man
+
+Generates man pages for executables (man1) and libraries (man3).
+
+Defaults to false, and you can say C<--no-pod2man> to override when
+it's set in the default options in C<PERL_CPANM_OPT>.
 
 =item --lwp
 
