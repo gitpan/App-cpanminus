@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.30_08";
+  our $VERSION = "1.30_09";
   
   =head1 NAME
   
@@ -312,7 +312,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.30_08";
+  our $VERSION = "1.30_09";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -348,6 +348,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           skip_installed => 1,
           auto_cleanup => 7, # days
           pod2man => 1,
+          installed_dists => 0,
           @_,
       }, $class;
   }
@@ -443,6 +444,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       if ($self->{base} && $self->{auto_cleanup}) {
           $self->cleanup_workdirs;
+      }
+  
+      if ($self->{installed_dists}) {
+          my $dists = $self->{installed_dists} > 1 ? "distributions" : "distribution";
+          $self->diag("$self->{installed_dists} $dists installed\n", 1);
       }
   
       return !@fail;
@@ -630,7 +636,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
   Options:
     -v,--verbose              Turns on chatty output
-    -q,--quiet                Turns off all output
+    -q,--quiet                Turns off the most output
     --interactive             Turns on interactive configure (required for Task:: modules)
     -f,--force                force install
     -n,--notest               Do not run unit tests
@@ -849,7 +855,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   }
   
   sub diag_fail {
-      my($self, $msg) = @_;
+      my($self, $msg, $always) = @_;
       chomp $msg;
       if ($self->{in_progress}) {
           $self->_diag("FAIL\n");
@@ -857,7 +863,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       if ($msg) {
-          $self->_diag("! $msg\n");
+          $self->_diag("! $msg\n", $always);
           $self->log("-> FAIL $msg\n");
       }
   }
@@ -871,13 +877,13 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   }
   
   sub _diag {
-      my $self = shift;
-      print STDERR @_ if $self->{verbose} or !$self->{quiet};
+      my($self, $msg, $always) = @_;
+      print STDERR $msg if $always or $self->{verbose} or !$self->{quiet};
   }
   
   sub diag {
-      my($self, $msg) = @_;
-      $self->_diag($msg);
+      my($self, $msg, $always) = @_;
+      $self->_diag($msg, $always);
       $self->log($msg);
   }
   
@@ -1495,11 +1501,12 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
                                : "installed $distname" ;
           my $msg = "Successfully $how";
           $self->diag_ok;
-          $self->diag("$msg\n");
+          $self->diag("$msg\n", 1);
+          $self->{installed_dists}++;
           return 1;
       } else {
           my $msg = "Building $distname failed";
-          $self->diag_fail("Installing $stuff failed. See $self->{log} for details.");
+          $self->diag_fail("Installing $stuff failed. See $self->{log} for details.", 1);
           return;
       }
   }
