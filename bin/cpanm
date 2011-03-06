@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.30_10";
+  our $VERSION = "1.30_11";
   
   =head1 NAME
   
@@ -312,7 +312,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.30_10";
+  our $VERSION = "1.30_11";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -349,6 +349,10 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           auto_cleanup => 7, # days
           pod2man => 1,
           installed_dists => 0,
+          scandeps => 0,
+          scandeps_tree => [],
+          format   => 'tree',
+          save_tarballs => undef,
           @_,
       }, $class;
   }
@@ -402,6 +406,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'curl!'   => \$self->{try_curl},
           'auto-cleanup=s' => \$self->{auto_cleanup},
           'man-pages!' => \$self->{pod2man},
+          'scandeps'   => \$self->{scandeps},
+          'format=s'   => \$self->{format},
+          'save-tarballs=s' => sub {
+              $self->{save_tarballs} = $self->maybe_abs($_[1]);
+          },
       );
   
       $self->{argv} = \@ARGV;
@@ -414,6 +423,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       $self->bootstrap_local_lib;
       if (@{$self->{bootstrap_deps} || []}) {
           local $self->{notest} = 1; # test failure in bootstrap should be tolerated
+          local $self->{scandeps} = 0;
           $self->install_deps(Cwd::cwd, 0, @{$self->{bootstrap_deps}});
       }
   }
@@ -449,6 +459,10 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       if ($self->{installed_dists}) {
           my $dists = $self->{installed_dists} > 1 ? "distributions" : "distribution";
           $self->diag("$self->{installed_dists} $dists installed\n", 1);
+      }
+  
+      if ($self->{scandeps}) {
+          $self->dump_scandeps();
       }
   
       return !@fail;
@@ -1105,7 +1119,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       if ($self->{cmd} eq 'info') {
-          print $dist->{cpanid}, "/", $dist->{filename}, "\n";
+          print $self->format_dist($dist), "\n";
           return 1;
       }
   
@@ -1144,6 +1158,13 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       return $self->build_stuff($module, $dist, $depth);
+  }
+  
+  sub format_dist {
+      my($self, $dist) = @_;
+  
+      # TODO support --dist-format?
+      return "$dist->{cpanid}/$dist->{filename}";
   }
   
   sub fetch_module {
@@ -1188,9 +1209,17 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           }
   
           $self->diag_ok;
+          $dist->{local_path} = File::Spec->rel2abs($name);
   
           my $dir = $self->unpack($file);
           next unless $dir; # unpack failed
+  
+          if (my $save = $self->{save_tarballs}) {
+              my $path = "$save/authors/id/$dist->{pathname}";
+              $self->chat("Copying $name to $path\n");
+              File::Path::mkpath([ File::Basename::dirname($path) ], 0, 0777);
+              File::Copy::copy($file, $path) or warn $!;
+          }
   
           return $dist, $dir;
       }
@@ -1331,7 +1360,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       if ($self->is_deprecated($meta)){
           return 0, $version;
       } elsif (!$want_ver or $version >= version->new($want_ver)) {
-          return 1, $version;
+          return 1, ($version || 'undef');
       } else {
           return 0, $version;
       }
@@ -1446,8 +1475,18 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       my $distname = $dist->{meta}{name} ? "$dist->{meta}{name}-$dist->{meta}{version}" : $stuff;
   
+      my $walkup;
+      if ($self->{scandeps}) {
+          $walkup = $self->scandeps_append_child($dist);
+      }
+  
       $self->install_deps_bailout($distname, $dist->{dir}, $depth, @deps)
           or return;
+  
+      if ($self->{scandeps}) {
+          $walkup->();
+          return 1;
+      }
   
       if ($self->{installdeps} && $depth == 0) {
           $self->diag("<== Installed dependencies for $stuff. Finishing.\n");
@@ -1609,7 +1648,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       # No need to remove, but this gets in the way of signature testing :/
-      unlink 'MYMETA.yml';
+      unlink $_ for qw(MYMETA.json MYMETA.yml);
   
       return @deps;
   }
@@ -1642,6 +1681,64 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       if (@targets) {
           $self->chat("Expiring ", scalar(@targets), " work directories.\n");
           File::Path::rmtree(\@targets, 0, 0); # safe = 0, since blib usually doesn't have write bits
+      }
+  }
+  
+  sub scandeps_append_child {
+      my($self, $dist) = @_;
+  
+      my $new_node = [ $dist, [] ];
+  
+      my $curr_node = $self->{scandeps_current} || [ undef, $self->{scandeps_tree} ];
+      push @{$curr_node->[1]}, $new_node;
+  
+      $self->{scandeps_current} = $new_node;
+  
+      return sub { $self->{scandeps_current} = $curr_node };
+  }
+  
+  sub dump_scandeps {
+      my $self = shift;
+  
+      if ($self->{format} eq 'tree') {
+          $self->walk_down(sub {
+              my($dist, $depth) = @_;
+              if ($depth == 0) {
+                  print $self->format_dist($dist), "\n";
+              } else {
+                  print " " x ($depth - 1);
+                  print "\\_ ", $self->format_dist($dist), "\n";
+              }
+          }, 1);
+      } elsif ($self->{format} eq 'dists') {
+          $self->walk_down(sub {
+              my($dist, $depth) = @_;
+              print $self->format_dist($dist), "\n";
+          }, 0);
+      } elsif ($self->{format} eq 'json') {
+          require JSON;
+          print JSON::encode_json($self->{scandeps_tree});
+      } elsif ($self->{format} eq 'yaml') {
+          require YAML;
+          print YAML::Dump($self->{scandeps_tree});
+      } else {
+          $self->diag("Unknown format: $self->{format}\n");
+      }
+  }
+  
+  sub walk_down {
+      my($self, $cb, $pre) = @_;
+      $self->_do_walk_down($self->{scandeps_tree}, $cb, 0, $pre);
+  }
+  
+  sub _do_walk_down {
+      my($self, $children, $cb, $depth, $pre) = @_;
+  
+      # DFS - $pre determines when we call the callback
+      for my $node (@$children) {
+          $cb->($node->[0], $depth) if $pre;
+          $self->_do_walk_down($node->[1], $cb, $depth + 1, $pre);
+          $cb->($node->[0], $depth) unless $pre;
       }
   }
   
