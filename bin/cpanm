@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.49_01";
+  our $VERSION = "1.49_02";
   $VERSION = eval $VERSION;
   
   =head1 NAME
@@ -329,7 +329,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.49_01";
+  our $VERSION = "1.49_02";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -816,31 +816,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       );
   }
   
-  sub _dump_inc {
-      my($self, $inc, $std_inc) = @_;
-  
-      # TODO Win32 has forward slashes in @INC but backslashes in %Config
-  
-      # $self->{base} for ModuleBuildPatch.pm, . for inc/Module/Install.pm
-      my @new_inc     = map { qq('$_') } (@$inc, $self->{base}, '.');
-      my @exclude_inc = map { qq('$_') } grep { $_ ne '.' && !ref } $self->_diff($inc, $std_inc);
-  
-      open my $out, ">$self->{base}/DumpedINC.pm" or die $!;
-      local $" = ",";
-      print $out <<EOF;
-  package DumpedINC;
-  my \%exclude = map { \$_ => 1 } (@exclude_inc);
-  sub import {
-    if (\$_[1] eq "tests") {
-      \@INC = grep !\$exclude{\$_}, \@INC;
-    } else {
-      \@INC = (@new_inc);
-    }
-  }
-  1;
-  EOF
-  }
-  
   sub _diff {
       my($self, $old, $new) = @_;
   
@@ -868,7 +843,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           $base ||= "~/perl5";
           if ($self->{self_contained}) {
               my @inc = $self->_core_only_inc($base);
-              $self->_dump_inc(\@inc, \@INC);
               $self->{search_inc} = [ @inc ];
           } else {
               $self->{search_inc} = [
@@ -1095,9 +1069,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       local $ENV{AUTOMATED_TESTING} = 1
           unless $self->env('NO_AUTOMATED_TESTING');
   
-     local $ENV{PERL5OPT} = "-I$self->{base} -MDumpedINC=tests"
-          if $self->{self_contained};
-  
       return 1 if $self->run_timeout($cmd, $self->{test_timeout});
       if ($self->{force}) {
           $self->diag_fail("Testing $distname failed but installing it anyway.");
@@ -1144,7 +1115,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
   sub chdir {
       my $self = shift;
-      chdir(File::Spec->canonpath($_[0])) or die "$_[0]: $!";
+      Cwd::chdir(File::Spec->canonpath($_[0])) or die "$_[0]: $!";
   }
   
   sub configure_mirrors {
@@ -1416,17 +1387,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
               $Module::CoreList::version{$]+0}{$mod};
           };
   
-          # HACK: Module::Build 0.3622 or later has non-core module
-          # dependencies such as Perl::OSType and CPAN::Meta, and causes
-          # issues when a newer version is loaded from 'perl' while deps
-          # are loaded from the 'site' library path. Just assume it's
-          # not in the core, and install to the new local library path.
-          if ($mod eq 'Module::Build') {
-              if ($version < 0.36 or $core_version != $version) {
-                  return 0, undef;
-              }
-          }
-  
           $version = $core_version if %Module::CoreList::version;
       }
   
@@ -1659,11 +1619,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           };
       }
   
-      my @switches;
-      @switches = ("-I$self->{base}", "-MDumpedINC") if $self->{self_contained};
-      local $ENV{PERL5LIB} = ''                      if $self->{self_contained};
-  
-      my @mb_switches = @switches;
+      my @mb_switches;
       unless ($self->{pod2man}) {
           # it has to be push, so Module::Build is loaded from the adjusted path when -L is in use
           push @mb_switches, ("-I$self->{base}", "-MModuleBuildSkipMan");
@@ -1674,13 +1630,12 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $try_eumm = sub {
           if (-e 'Makefile.PL') {
               $self->chat("Running Makefile.PL\n");
-              local $ENV{X_MYMETA} = 'YAML';
   
               # NOTE: according to Devel::CheckLib, most XS modules exit
               # with 0 even if header files are missing, to avoid receiving
               # tons of FAIL reports in such cases. So exit code can't be
               # trusted if it went well.
-              if ($self->configure([ $self->{perl}, @switches, "Makefile.PL" ])) {
+              if ($self->configure([ $self->{perl}, "Makefile.PL" ])) {
                   $state->{configured_ok} = -e 'Makefile';
               }
               $state->{configured}++;
@@ -1734,7 +1689,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       if ($state->{use_module_build} &&
           -e "_build/build_params") {
           my $params = do { open my $in, "_build/build_params"; $self->safe_eval(join "", <$in>) };
-          return $params->[2]{module_name};
+          return eval { $params->[2]{module_name} } || undef;
       } elsif (-e "Makefile") {
           open my $mf, "Makefile";
           while (<$mf>) {
@@ -1755,15 +1710,12 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $base = ($ENV{PERL_MM_OPT} || '') =~ /INSTALL_BASE=/
           ? ($self->install_base($ENV{PERL_MM_OPT}) . "/lib/perl5") : $Config{sitelibexp};
   
-      my $dir = "$base/auto/meta/$dist->{distvname}";
+      my $dir = "$base/$Config{archname}/.meta/$dist->{distvname}";
       File::Path::mkpath([ $dir ], 0, 0777);
   
-      # Existence of MYMETA.* Depends on EUMM/M::B/M::I versions *and* whether user
-      # has CPAN::Meta or YAML::Tiny/JSON installed
-      for my $file (qw( META.yml MYMETA.yml MYMETA.json )) {
-          if (-e $file) {
-              File::Copy::copy($file, "$dir/$file");
-          }
+      # Existence of MYMETA.* Depends on EUMM/M::B versions and CPAN::Meta
+      if (-e "MYMETA.json") {
+          File::Copy::copy("MYMETA.json", "$dir/MYMETA.json");
       }
   
       my $local = {
@@ -1772,23 +1724,12 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           version => $dist->{version},
           dist => $dist->{distvname},
           pathname => $dist->{pathname},
-          requires => {
-              configure => +{ @$config_deps },
-              build     => +{ @$build_deps },
-          },
-          provides => $self->find_provides($dist->{meta}),
+          provides => Module::Metadata->package_versions_from_directory("blib/lib"),
       };
   
       require JSON::PP;
-      open my $fh, ">", "$dir/local.json" or die $!;
+      open my $fh, ">", "$dir/install.json" or die $!;
       print $fh JSON::PP::encode_json($local);
-  }
-  
-  sub find_provides {
-      my $self = shift;
-      require Dist::Metadata;
-      my $dist = Dist::Metadata->new(dir => '.');
-      $dist->package_versions;
   }
   
   sub install_base {
@@ -5673,784 +5614,6 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   
   
 CPAN_META_YAML
-
-$fatpacked{"Dist/Metadata.pm"} = <<'DIST_METADATA';
-  # vim: set ts=2 sts=2 sw=2 expandtab smarttab:
-  #
-  # This file is part of Dist-Metadata
-  #
-  # This software is copyright (c) 2011 by Randy Stauner.
-  #
-  # This is free software; you can redistribute it and/or modify it under
-  # the same terms as the Perl 5 programming language system itself.
-  #
-  use strict;
-  use warnings;
-  
-  package Dist::Metadata;
-  BEGIN {
-    $Dist::Metadata::VERSION = '0.904';
-  }
-  BEGIN {
-    $Dist::Metadata::AUTHORITY = 'cpan:RWSTAUNER';
-  }
-  # ABSTRACT: Information about a perl module distribution
-  
-  use Carp qw(croak carp);
-  use CPAN::Meta 2.1 ();
-  use List::Util qw(first);    # core in perl v5.7.3
-  
-  # something that is obviously not a real value
-  use constant UNKNOWN => '- unknown -';
-  
-  
-  sub new {
-    my $class = shift;
-    my $self  = {
-      determine_packages => 1,
-      @_ == 1 ? %{ $_[0] } : @_
-    };
-  
-    my @formats = qw( dist file dir struct );
-    croak(qq[A dist must be specified (one of ] .
-        join(', ', map { "'$_'" } @formats) . ')')
-      unless first { $self->{$_} } @formats;
-  
-    bless $self, $class;
-  }
-  
-  
-  sub dist {
-    my ($self) = @_;
-    return $self->{dist} ||= do {
-      my $dist;
-      if( my $struct = $self->{struct} ){
-        require Dist::Metadata::Struct;
-        $dist = Dist::Metadata::Struct->new(%$struct);
-      }
-      elsif( my $dir = $self->{dir} ){
-        require Dist::Metadata::Dir;
-        $dist = Dist::Metadata::Dir->new(dir => $dir);
-      }
-      elsif ( my $file = $self->{file} ){
-        require Dist::Metadata::Tar;
-        $dist = Dist::Metadata::Tar->new(file => $file);
-      }
-      $dist; # return
-    };
-  }
-  
-  
-  sub default_metadata {
-    my ($self) = @_;
-  
-    return {
-      # required
-      abstract       => UNKNOWN,
-      author         => [],
-      dynamic_config => 0,
-      generated_by   => ( ref($self) || $self ) . ' version ' . $self->VERSION,
-      license        => ['unknown'], # this 'unknown' comes from CPAN::Meta::Spec
-      'meta-spec'    => {
-        version => '2',
-        url     => 'http://search.cpan.org/perldoc?CPAN::Meta::Spec',
-      },
-      name           => UNKNOWN,
-      release_status => 'stable',
-      version        => 0,
-  
-      # optional
-      no_index => {
-        # ignore test and build directories by default
-        directory => [qw( inc t xt )],
-      },
-      # provides => { package => { file => $file, version => $version } }
-    };
-  }
-  
-  
-  sub determine_metadata {
-    my ($self) = @_;
-  
-    my $dist = $self->dist;
-    my $meta = $self->default_metadata;
-  
-    # get name and version from dist if dist was able to parse them
-    foreach my $att (qw(name version)) {
-      my $val = $dist->$att;
-      # if the dist could determine it that's better than the default
-      # but undef won't validate.  value in $self will still override.
-      $meta->{$att} = $val
-        if defined $val;
-    }
-  
-    # any passed in values should take priority
-    foreach my $field ( keys %$meta ){
-      $meta->{$field} = $self->{$field}
-        if exists $self->{$field};
-    }
-  
-    return $meta;
-  }
-  
-  
-  sub determine_packages {
-    # meta must be passed because to avoid infinite loop
-    my ( $self, $meta ) = @_;
-    # if not passed in, use defaults (we just want the 'no_index' property)
-    $meta ||= $self->meta_from_struct( $self->determine_metadata );
-  
-    my @files = grep { $meta->should_index_file( $_ ) } $self->dist->perl_files;
-  
-    # TODO: should we limit packages to lib/ if it exists?
-    # my @lib = grep { m#^lib/# } @files; @files = @lib if @lib;
-  
-    unless (@files) {
-      warn("No perl files found in distribution\n");
-      return {};
-    }
-  
-    my $packages = $self->dist->determine_packages(@files);
-  
-    # remove any packages that should not be indexed (if any)
-    foreach my $pack ( keys %$packages ) {
-      delete $packages->{$pack}
-        if !$meta->should_index_package($pack);
-    }
-  
-    return $packages;
-  }
-  
-  
-  sub load_meta {
-    my ($self) = @_;
-  
-    my $dist  = $self->dist;
-    my @files = $dist->list_files;
-    my ( $meta, $metafile );
-  
-    # prefer json file (spec v2)
-    if ( $metafile = first { m#^META\.json$# } @files ) {
-      $meta = CPAN::Meta->load_json_string( $dist->file_content($metafile) );
-    }
-    # fall back to yaml file (spec v1)
-    elsif ( $metafile = first { m#^META\.ya?ml$# } @files ) {
-      $meta = CPAN::Meta->load_yaml_string( $dist->file_content($metafile) );
-    }
-    # no META file found in dist
-    else {
-      $meta = $self->meta_from_struct( $self->determine_metadata );
-    }
-  
-    # Something has to be indexed, so if META has no (or empty) 'provides'
-    # attempt to determine packages unless specifically configured not to
-    if ( !keys %{ $meta->provides || {} } && $self->{determine_packages} ) {
-      # respect api/encapsulation
-      my $struct = $meta->as_struct;
-      $struct->{provides} = $self->determine_packages($meta);
-      $meta = $self->meta_from_struct($struct);
-    }
-  
-    return $meta;
-  }
-  
-  
-  sub meta {
-    my ($self) = @_;
-    return $self->{meta} ||= $self->load_meta;
-  }
-  
-  
-  sub meta_from_struct {
-    my ($self, $struct) = @_;
-    return CPAN::Meta->create( $struct, { lazy_validation => 1 } );
-  }
-  
-  
-  sub package_versions {
-    my ($self) = shift;
-    my $provides = @_ ? shift : $self->provides; # || {}
-    return {
-      map { ($_ => $provides->{$_}{version}) } keys %$provides
-    };
-  }
-  
-  
-  {
-    no strict 'refs'; ## no critic (NoStrict)
-    foreach my $method ( qw(
-      name
-      provides
-      version
-    ) ){
-      *$method = sub { $_[0]->meta->$method };
-    }
-  }
-  
-  1;
-  
-  
-  __END__
-  =pod
-  
-DIST_METADATA
-
-$fatpacked{"Dist/Metadata/Dir.pm"} = <<'DIST_METADATA_DIR';
-  # vim: set ts=2 sts=2 sw=2 expandtab smarttab:
-  #
-  # This file is part of Dist-Metadata
-  #
-  # This software is copyright (c) 2011 by Randy Stauner.
-  #
-  # This is free software; you can redistribute it and/or modify it under
-  # the same terms as the Perl 5 programming language system itself.
-  #
-  use strict;
-  use warnings;
-  
-  package Dist::Metadata::Dir;
-  BEGIN {
-    $Dist::Metadata::Dir::VERSION = '0.904';
-  }
-  BEGIN {
-    $Dist::Metadata::Dir::AUTHORITY = 'cpan:RWSTAUNER';
-  }
-  # ABSTRACT: Enable Dist::Metadata for a directory
-  
-  use Carp qw(croak carp);    # core
-  use File::Find ();          # core
-  use File::Spec ();          # core
-  use parent 'Dist::Metadata::Dist';
-  
-  push(@Dist::Metadata::CARP_NOT, __PACKAGE__);
-  
-  
-  sub new {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
-  
-    # chop trailing slash if present
-    $self->{dir} =~ s{/*$}{};
-  
-    return $self;
-  }
-  
-  sub required_attribute { 'dir' }
-  
-  
-  sub determine_name_and_version {
-    my ($self) = @_;
-    $self->set_name_and_version( $self->parse_name_and_version( $self->dir ) );
-    return $self->SUPER::determine_name_and_version();
-  }
-  
-  
-  sub dir {
-    $_[0]->{dir};
-  }
-  
-  # this shouldn't be called
-  sub extract_into {
-    croak q[A directory doesn't need to be extracted];
-  }
-  
-  
-  sub file_content {
-    my ($self, $file) = @_;
-    my $path = File::Spec->catfile($self->{dir}, $self->full_path($file));
-  
-    open(my $fh, '<', $path)
-      or croak "Failed to open file '$path': $!";
-  
-    return do { local $/; <$fh> };
-  }
-  
-  
-  sub find_files {
-    my ($self) = @_;
-  
-    my $dir = $self->{dir};
-    my @files;
-  
-    File::Find::find(
-      {
-        wanted => sub {
-          push @files, File::Spec->abs2rel($_, $dir)
-            if -f $_;
-        },
-        no_chdir => 1
-      },
-      $dir
-    );
-  
-    return @files;
-  }
-  
-  
-  sub physical_directory {
-    my ($self) = @_;
-  
-    # go into root dir if there is one
-    return File::Spec->catdir($self->{dir}, $self->{root})
-      if $self->{root};
-  
-    return $self->{dir};
-  }
-  
-  1;
-  
-  
-  __END__
-  =pod
-  
-DIST_METADATA_DIR
-
-$fatpacked{"Dist/Metadata/Dist.pm"} = <<'DIST_METADATA_DIST';
-  #
-  # This file is part of Dist-Metadata
-  #
-  # This software is copyright (c) 2011 by Randy Stauner.
-  #
-  # This is free software; you can redistribute it and/or modify it under
-  # the same terms as the Perl 5 programming language system itself.
-  #
-  use strict;
-  use warnings;
-  
-  package Dist::Metadata::Dist;
-  BEGIN {
-    $Dist::Metadata::Dist::VERSION = '0.904';
-  }
-  BEGIN {
-    $Dist::Metadata::Dist::AUTHORITY = 'cpan:RWSTAUNER';
-  }
-  # ABSTRACT: Base class for format-specific implementations
-  
-  use Carp qw(croak carp);     # core
-  use File::Spec ();           # core
-  use File::Spec::Unix ();     # core
-  use Try::Tiny 0.09;
-  
-  
-  sub new {
-    my $class = shift;
-    my $self  = {
-      @_ == 1 ? %{ $_[0] } : @_
-    };
-  
-    bless $self, $class;
-  
-    my $req = $class->required_attribute;
-    croak qq['$req' parameter required]
-      if $req && !$self->{$req};
-  
-    return $self;
-  }
-  
-  
-  sub default_file_spec { 'File::Spec' }
-  
-  
-  sub determine_name_and_version {
-    my ($self) = @_;
-    $self->set_name_and_version( $self->parse_name_and_version( $self->root ) );
-    return;
-  }
-  
-  
-  sub determine_packages {
-    my ($self, @files) = @_;
-  
-    my $determined = try {
-      my $dir = $self->physical_directory(@files);
-  
-      # return
-      $self->packages_from_directory($dir, @files);
-    }
-    catch {
-      carp("Error determining packages: $_[0]");
-      +{}; # return
-    };
-  
-    return $determined;
-  }
-  
-  
-  sub extract_into {
-    my ($self, $dir, @files) = @_;
-  
-    @files = $self->list_files
-      unless @files;
-  
-    require File::Path;
-    require File::Basename;
-  
-    foreach my $file (@files) {
-      my $path = File::Spec->catfile($dir, $file);
-  
-      # legacy interface (should be compatible with whatever version is installed)
-      File::Path::mkpath( File::Basename::dirname($path), 0, oct(700) );
-  
-      open(my $fh, '>', $path)
-        or croak "Failed to open '$path' for writing: $!";
-      print $fh $self->file_content($file);
-    }
-  
-    return $dir;
-  }
-  
-  
-  sub file_content {
-    croak q[Method 'file_content' not defined];
-  }
-  
-  
-  sub find_files {
-    croak q[Method 'find_files' not defined];
-  }
-  
-  
-  sub file_spec {
-    return $_[0]->{file_spec} ||= $_[0]->default_file_spec;
-  }
-  
-  
-  sub full_path {
-    my ($self, $file) = @_;
-  
-    return $file
-      unless my $root = $self->root;
-  
-    # don't re-add the root if it's already there
-    return $file
-      # FIXME: this regexp is probably not cross-platform...
-      # FIXME: is there a way to do this with File::Spec?
-      if $file =~ m@^\Q${root}\E[\\/]@;
-  
-    return $self->file_spec->catfile($root, $file);
-  }
-  
-  
-  sub list_files {
-    my ($self) = @_;
-  
-    $self->{_list_files} = do {
-      my @files = sort $self->find_files;
-      my ($root, @rel) = $self->remove_root_dir(@files);
-      $self->{root} = $root;
-      \@rel; # return
-    }
-      unless $self->{_list_files};
-  
-    return @{ $self->{_list_files} };
-  }
-  
-  
-  {
-    no strict 'refs'; ## no critic (NoStrict)
-    foreach my $method ( qw(
-      name
-      version
-    ) ){
-      *$method = sub {
-        my ($self) = @_;
-  
-        $self->determine_name_and_version
-          if !exists $self->{ $method };
-  
-        return $self->{ $method };
-      };
-    }
-  }
-  
-  
-  sub packages_from_directory {
-    my ($self, $dir, @files) = @_;
-  
-    require Module::Metadata;
-  
-    my $provides = try {
-      # M::M::p_v_f_d expects full paths for \@files
-      my $packages = Module::Metadata->package_versions_from_directory($dir,
-        # FIXME: $self->file_spec->splitpath($_) (write tests first)
-        [map { File::Spec->catfile($dir, $_) } @files]
-      );
-      while ( my ($pack, $pv) = each %$packages ) {
-        # CPAN::Meta expects file paths in Unix format
-        # since M::M::p_v_f_d reads from physical dir use base File::Spec to split
-        $pv->{file} =
-          File::Spec::Unix->catfile( File::Spec->splitdir( $pv->{file} ) );
-      }
-      $packages; # return
-    }
-    catch {
-      carp("Failed to determine packages: $_[0]");
-      +{}; # return
-    };
-    return $provides || {};
-  }
-  
-  
-  sub parse_name_and_version {
-    my ($self, $path) = @_;
-    my ( $name, $version );
-    if ( $path ){
-      $path =~ m!
-        ([^\\/]+)             # name (anything below final directory)
-        -                     # separator
-        (v?[0-9._]+)          # version
-        (?:                   # possible file extensions
-            \.t(?:ar\.)?gz
-        )?
-        $
-      !x and
-        ( $name, $version ) = ( $1, $2 );
-    }
-    return ($name, $version);
-  }
-  
-  
-  
-  sub perl_files {
-    return
-      grep { /\.pm$/ }
-      $_[0]->list_files;
-  }
-  
-  
-  sub physical_directory {
-    my ($self, @files) = @_;
-  
-    require   File::Temp;
-    # dir will be removed when return value goes out of scope (in caller)
-    my $dir = File::Temp->newdir();
-  
-    $self->extract_into($dir, @files);
-    return $dir;
-  }
-  
-  
-  sub remove_root_dir {
-    my ($self, @files) = @_;
-    return unless @files;
-  
-    # FIXME: can we use File::Spec for these regexp's instead of [\\/] ?
-  
-    # grab the root dir from the first file
-    $files[0] =~ m{^([^\\/]+)[\\/]}
-      # if not matched quit now
-      or return (undef, @files);
-  
-    my $dir = $1;
-    my @rel;
-  
-    # strip $dir from each file
-    for (@files) {
-  
-      m{^\Q$dir\E[\\/](.+)$}
-        # if the match failed they're not all under the same root so just return now
-        or return (undef, @files);
-  
-      push @rel, $1;
-    }
-  
-    return ($dir, @rel);
-  
-  }
-  
-  
-  sub required_attribute { return }
-  
-  
-  sub root {
-    my ($self) = @_;
-  
-    # call list_files instead of find_files so that it caches the result
-    $self->list_files
-      unless exists $self->{root};
-  
-    return $self->{root};
-  }
-  
-  
-  sub set_name_and_version {
-    my ($self, @values) = @_;
-    my @fields = qw( name version );
-  
-    foreach my $i ( 0 .. $#fields ){
-      $self->{ $fields[$i] } = $values[$i]
-        if !exists $self->{ $fields[$i] } && defined $values[$i];
-    }
-    return;
-  }
-  
-  
-  # version() defined with name()
-  
-  1;
-  
-  
-  __END__
-  =pod
-  
-DIST_METADATA_DIST
-
-$fatpacked{"Dist/Metadata/Struct.pm"} = <<'DIST_METADATA_STRUCT';
-  # vim: set ts=2 sts=2 sw=2 expandtab smarttab:
-  #
-  # This file is part of Dist-Metadata
-  #
-  # This software is copyright (c) 2011 by Randy Stauner.
-  #
-  # This is free software; you can redistribute it and/or modify it under
-  # the same terms as the Perl 5 programming language system itself.
-  #
-  use strict;
-  use warnings;
-  
-  package Dist::Metadata::Struct;
-  BEGIN {
-    $Dist::Metadata::Struct::VERSION = '0.904';
-  }
-  BEGIN {
-    $Dist::Metadata::Struct::AUTHORITY = 'cpan:RWSTAUNER';
-  }
-  # ABSTRACT: Enable Dist::Metadata for a data structure
-  
-  use Carp qw(croak carp); # core
-  use File::Spec::Unix (); # core
-  use parent 'Dist::Metadata::Dist';
-  
-  push(@Dist::Metadata::CARP_NOT, __PACKAGE__);
-  
-  
-  sub required_attribute { 'files' }
-  
-  
-  sub default_file_spec { 'File::Spec::Unix' }
-  
-  
-  sub file_content {
-    my ($self, $file) = @_;
-    my $content = $self->{files}{ $self->full_path($file) };
-  
-    # 5.10: given(ref($content))
-  
-    if( my $ref = ref $content ){
-      return $ref eq 'SCALAR'
-        # allow a scalar ref
-        ? $$content
-        # or an IO-like object
-        : do { local $/; $content->getline; }
-    }
-    # else a simple string
-    return $content;
-  }
-  
-  
-  sub find_files {
-    my ($self) = @_;
-  
-    # place an entry in the hash for consistency with other formats
-    $self->{dir} = '';
-  
-    return keys %{ $self->{files} };
-  }
-  
-  1;
-  
-  
-  __END__
-  =pod
-  
-DIST_METADATA_STRUCT
-
-$fatpacked{"Dist/Metadata/Tar.pm"} = <<'DIST_METADATA_TAR';
-  # vim: set ts=2 sts=2 sw=2 expandtab smarttab:
-  #
-  # This file is part of Dist-Metadata
-  #
-  # This software is copyright (c) 2011 by Randy Stauner.
-  #
-  # This is free software; you can redistribute it and/or modify it under
-  # the same terms as the Perl 5 programming language system itself.
-  #
-  use strict;
-  use warnings;
-  
-  package Dist::Metadata::Tar;
-  BEGIN {
-    $Dist::Metadata::Tar::VERSION = '0.904';
-  }
-  BEGIN {
-    $Dist::Metadata::Tar::AUTHORITY = 'cpan:RWSTAUNER';
-  }
-  # ABSTRACT: Enable Dist::Metadata for tar files
-  
-  use Archive::Tar ();
-  use Carp qw(croak carp); # core
-  use File::Spec::Unix (); # core
-  use Try::Tiny 0.09;
-  use parent 'Dist::Metadata::Dist';
-  
-  push(@Dist::Metadata::CARP_NOT, __PACKAGE__);
-  
-  
-  sub required_attribute { 'file' }
-  
-  
-  sub default_file_spec { 'File::Spec::Unix' }
-  
-  
-  sub determine_name_and_version {
-    my ($self) = @_;
-    $self->set_name_and_version( $self->parse_name_and_version( $self->file ) );
-    return $self->SUPER::determine_name_and_version(@_);
-  }
-  
-  
-  sub file {
-    return $_[0]->{file};
-  }
-  
-  
-  sub file_content {
-    my ( $self, $file ) = @_;
-    return $self->tar->get_content( $self->full_path($file) );
-  }
-  
-  
-  sub find_files {
-    my ($self) = @_;
-    return
-      map  { $_->full_path }
-      grep { $_->is_file   }
-        $self->tar->get_files;
-  }
-  
-  
-  sub tar {
-    my ($self) = @_;
-    return $self->{tar} ||= do {
-      my $file = $self->file;
-  
-      croak "File '$file' does not exist"
-        unless -e $file;
-  
-      my $tar = Archive::Tar->new();
-      $tar->read($file);
-  
-      $tar; # return
-    };
-  }
-  
-  1;
-  
-  
-  __END__
-  =pod
-  
-DIST_METADATA_TAR
 
 $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   # vim: ts=4 sts=4 sw=4 et:
