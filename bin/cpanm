@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.5003";
+  our $VERSION = "1.5004";
   
   =head1 NAME
   
@@ -326,7 +326,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.5003";
+  our $VERSION = "1.5004";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -1741,7 +1741,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $local = {
           name => $module_name,
           module => $module,
-          version => $dist->{version},
+          version => $provides->{$module}{version} || $dist->{version},
           dist => $dist->{distvname},
           pathname => $dist->{pathname},
           provides => $provides,
