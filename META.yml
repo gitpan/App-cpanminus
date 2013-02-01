@@ -24,4 +24,4 @@ requires:
 resources:
   bugtracker: https://github.com/miyagawa/cpanminus/issues
   repository: git://github.com/miyagawa/cpanminus.git
-version: 1.59_02
+version: 1.59_03
