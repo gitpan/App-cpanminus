@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "1.59_06";
+our $VERSION = "1.59_07";
 
 =head1 NAME
 
@@ -116,8 +116,8 @@ writing code.
 
 It queries the CPAN Meta DB site at L<http://cpanmetadb.plackperl.org/>.
 The site is updated at least every hour to reflect the latest changes
-from fast syncing mirrors. The script then also falls back
-to scrape the site L<http://search.cpan.org/>.
+from fast syncing mirrors. The script then also falls back to query the
+module at L<http://metacpan.org/> using its wonderful API.
 
 Fetched files are unpacked in C<~/.cpanm> and automatically cleaned up
 periodically.  You can configure the location of this with the
