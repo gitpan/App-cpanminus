@@ -1,45 +1,7 @@
 See http://github.com/miyagawa/cpanminus/ for the latest development.
 
-1.6901  2013-04-21 08:50:10 CST
-   [Improvements]
-      - --self-upgrade dies rather than warns when it's installed via perlbrew etc.
-      - Fixed --version output
-
-1.6900  2013-04-15 16:41:31 JST
-   [Maintenance]
-      - Remove 'cpanm' executable in the root directory from the distribution
-
-1.6193  2013-04-15 16:36:53 JST
-   [Maintenance]
-      - Changed how to make a release by switching to Milla and dzil
-
-1.6192  Sun Apr 14 17:12:52 JST 2013
-   [New Features]
-      - Support features with --with-feature
-
-   [Improvements]
-      - Fixed an inconsistency when `cpanm Module@ver` always tries to reinstall
-        the module even when you have it already, when --skip-installed is on
-      - Display useful info about %ENV, %Config and @INC in cpanm --version
-
-1.6191  Sun Apr 14 12:05:57 JST 2013
-   [New Features]
-      - Support --configure-args
-
-   [Improvements]
-      - Use String::ShellQuote on non-Win32 systems
-      - Strip lib files for cpanm executable as well
-      - Support version requirements for 'perl', not just modules
-
-1.6190  Sat Apr 13 20:44:52 JST 2013
-   [New Features]
-      - Support --with-develop to install develop dependencies
-      - Installs 'recommends' dependencies by default, but ignore failures
-      - Add --with-suggests to also install 'suggests' dependencies
-
-   [Improvements]
-      - Overhauled Metadata handling using CPAN::Meta's validation
-      - Stopped monkey-patching Module::Build to skip man-page generation #130
+1.6109  Sun Apr 21 09:02:42 CST 2013
+      - Maintenance release, no code changes
 
 1.6108  Sat Apr 13 15:29:32 JST 2013
    [Improvements]
