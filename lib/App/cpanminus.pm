@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "1.6109";
+our $VERSION = "1.6902";
 
 =head1 encoding utf-8
 
@@ -246,7 +246,7 @@ The standalone executable contains the following modules embedded.
 
 =head1 LICENSE
 
-Same as Perl.
+This software is licensed under the same terms as Perl.
 
 =head1 CREDITS
 
