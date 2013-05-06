@@ -29,12 +29,13 @@ resources:
   bugtracker: https://github.com/miyagawa/cpanminus/issues
   homepage: https://github.com/miyagawa/cpanminus
   repository: https://github.com/miyagawa/cpanminus.git
-version: 1.6911
+version: 1.6912
 x_contributors:
   - 'Alessandro Ghedini <al3xbio@gmail.com>'
   - 'Andrew Rodland <andrew@cleverdomain.org>'
   - 'Ash Berlin <ash_github@firemirror.com>'
   - 'Ben Bullock <benkasminbullock@gmail.com>'
+  - 'Breno G. de Oliveira <garu@cpan.org>'
   - 'Christian Walde <walde.christian@googlemail.com>'
   - 'Dagfinn Ilmari Mannsåker <ilmari@ilmari.org>'
   - 'Dave Goodell <davidjgoodell@gmail.com>'
