@@ -137,16 +137,12 @@ QUESTIONS
     If you need these features, use CPAN, CPANPLUS or the standalone tools
     that are mentioned.
 
-    *   Bundle:: module dependencies
-
     *   CPAN testers reporting
 
     *   Building RPM packages from CPAN modules
 
     *   Listing the outdated modules that needs upgrading. See
         App::cpanoutdated
-
-    *   Uninstalling modules. See pm-uninstall.
 
     *   Showing the changes of the modules you're about to upgrade. See
         cpan-listchanges
