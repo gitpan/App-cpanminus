@@ -137,7 +137,7 @@ QUESTIONS
     If you need these features, use CPAN, CPANPLUS or the standalone tools
     that are mentioned.
 
-    *   CPAN testers reporting
+    *   CPAN testers reporting. See App::cpanminus::reporter
 
     *   Building RPM packages from CPAN modules
 
