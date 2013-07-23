@@ -6,6 +6,9 @@ use warnings;
 
 use ExtUtils::MakeMaker 6.30;
 
+use lib 'inc';
+use File::ShareDir::Install;
+install_share dist => "share";
 
 
 my %WriteMakefileArgs = (
@@ -29,7 +32,7 @@ my %WriteMakefileArgs = (
   "TEST_REQUIRES" => {
     "Test::More" => 0
   },
-  "VERSION" => "1.6927",
+  "VERSION" => "1.6928",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -67,5 +70,10 @@ delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
 
 WriteMakefile(%WriteMakefileArgs);
 
+{
+package
+MY;
+use File::ShareDir::Install qw(postamble);
+}
 
 
