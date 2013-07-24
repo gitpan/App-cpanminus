@@ -8,7 +8,6 @@ Makefile.PL
 README
 bin/cpanm
 cpanfile
-inc/File/ShareDir/Install.pm
 lib/App/cpanminus.pm
-share/cpanm
+lib/App/cpanminus/fatscript.pm
 t/happy_cpantesters.t

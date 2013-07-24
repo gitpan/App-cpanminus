@@ -1,4 +1,4 @@
-#!perl
+package App::cpanminus::fatscript;
 #
 # You want to install cpanminus? Run the following command and it will
 # install itself for you. You might want to run it as a root with sudo
@@ -18,7 +18,7 @@ BEGIN {
 my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
-  package App::cpanminus;our$VERSION="1.6927";1;
+  package App::cpanminus;our$VERSION="1.6929";1;
 APP_CPANMINUS
 
 $fatpacked{"App/cpanminus/Dependency.pm"} = <<'APP_CPANMINUS_DEPENDENCY';
@@ -424,6 +424,8 @@ unshift @INC, sub {
 
 use strict;
 use App::cpanminus::script;
+
+our $VERSION = "1.6929";
 
 unless (caller) {
     my $app = App::cpanminus::script->new;
