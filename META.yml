@@ -21,6 +21,8 @@ no_index:
     - share
     - eg
     - examples
+  file:
+    - lib/App/cpanminus/fatscript.pm
 requires:
   ExtUtils::Install: 1.46
   ExtUtils::MakeMaker: 6.31
@@ -29,7 +31,7 @@ resources:
   bugtracker: https://github.com/miyagawa/cpanminus/issues
   homepage: https://github.com/miyagawa/cpanminus
   repository: https://github.com/miyagawa/cpanminus.git
-version: 1.6930
+version: 1.6931
 x_contributors:
   - 'Alessandro Ghedini <al3xbio@gmail.com>'
   - 'Andrew Rodland <andrew@cleverdomain.org>'
