@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6931";
+  our $VERSION = "1.6932";
   
   =encoding utf8
   
@@ -2984,8 +2984,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           );
       }
   
-      $dist->{provides} = $self->extract_packages($dist->{meta}, ".");
-  
       # workaround for bad M::B based dists with no configure_requires
       # https://github.com/miyagawa/cpanminus/issues/273
       if (-e 'Build.PL') {
@@ -3005,8 +3003,12 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       $self->diag_ok($configure_state->{configured_ok} ? "OK" : "N/A");
   
-      # install direct 'test' dependencies for --installdeps, even with --notest
       my $root_target = (($self->{installdeps} or $self->{showdeps}) and $depth == 0);
+  
+      # Do not scan packages for apps, especially with Carton and local libs in them
+      $dist->{provides} = $self->extract_packages($dist->{meta}, ".") unless $root_target;
+  
+      # install direct 'test' dependencies for --installdeps, even with --notest
       $dist->{want_phases} = $self->{notest} && !$root_target
                            ? [qw( build runtime )] : [qw( build test runtime )];
   
