@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6933";
+  our $VERSION = "1.6934";
   
   =encoding utf8
   
@@ -3136,7 +3136,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $configure_state = $self->configure_this($dist, $depth);
       $self->diag_ok($configure_state->{configured_ok} ? "OK" : "N/A");
   
-      $dist->{provides} = $self->extract_packages($dist->{meta}, ".") if -e 'MANIFEST';
+      $dist->{provides} = $self->extract_packages($dist->{cpanmeta}, ".")
+          if $dist->{cpanmeta} && -e 'MANIFEST';
   
       # install direct 'test' dependencies for --installdeps, even with --notest
       my $root_target = (($self->{installdeps} or $self->{showdeps}) and $depth == 0);
