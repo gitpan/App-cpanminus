@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6934";
+  our $VERSION = "1.6935";
   
   =encoding utf8
   
@@ -2371,7 +2371,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       my $dist = $self->resolve_name($module, $version);
       unless ($dist) {
-          $self->diag_fail("Couldn't find module or a distribution $module ($version)", 1);
+          my $what = $module . ($version ? " ($version)" : "");
+          $self->diag_fail("Couldn't find module or a distribution $what", 1);
           return;
       }
   
@@ -2857,7 +2858,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       $self->run([ 'git', 'clone', $uri, $dir ]);
   
       unless (-e "$dir/.git") {
-          $self->diag_fail("Failed cloning git repository $uri");
+          $self->diag_fail("Failed cloning git repository $uri", 1);
           return;
       }
   
@@ -3376,7 +3377,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       require App::cpanminus::ParsePM;
   
       my $manifest = eval { ExtUtils::Manifest::manifind() } || {};
-      my @files = grep { /\.pm$/ && $try->($_) } keys %$manifest;
+      my @files = grep { /\.pm(?:\.PL)?$/ && $try->($_) } keys %$manifest;
   
       my $provides = {};
   
@@ -3410,7 +3411,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $local = {
           name => $module_name,
           target => $module,
-          version => $provides->{$module_name}{version} || $dist->{version},
+          version => exists $provides->{$module_name}
+              ? ($provides->{$module_name}{version} || $dist->{version}) : $dist->{version},
           dist => $dist->{distvname},
           pathname => $dist->{pathname},
           provides => $provides,
