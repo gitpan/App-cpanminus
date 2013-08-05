@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6935";
+  our $VERSION = "1.6936";
   
   =encoding utf8
   
@@ -3086,26 +3086,18 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           $self->verify_signature($dist) or return;
       }
   
-      if (-e 'META.json') {
-          $self->chat("Checking configure dependencies from META.json\n");
-          $dist->{meta} = $self->parse_meta('META.json');
-      } elsif (-e 'META.yml') {
-          $self->chat("Checking configure dependencies from META.yml\n");
-          $dist->{meta} = $self->parse_meta('META.yml');
+      require CPAN::Meta;
+  
+      my($meta_file) = grep -f, qw(META.json META.yml);
+      if ($meta_file) {
+          $self->chat("Checking configure dependencies from $meta_file\n");
+          $dist->{cpanmeta} = eval { CPAN::Meta->load_file($meta_file) };
+      } elsif ($dist->{dist} && $dist->{version}) {
+          $self->chat("META.yml/json not found. Creating skelton for it.\n");
+          $dist->{cpanmeta} = CPAN::Meta->new({ name => $dist->{dist}, version => $dist->{version} });
       }
   
-      if (!$dist->{meta} && $dist->{source} eq 'cpan') {
-          $self->chat("META.yml/json not found or unparsable. Creating skelton for it.\n");
-          require CPAN::Meta;
-          $dist->{meta} = CPAN::Meta->new({ name => $dist->{dist}, version => $dist->{version} })->as_struct;
-      }
-  
-      $dist->{meta} ||= {};
-  
-      if ($dist->{meta}{'meta-spec'}) {
-          require CPAN::Meta;
-          $dist->{cpanmeta} = CPAN::Meta->new($dist->{meta}, { lazy_validation => 1 });
-      }
+      $dist->{meta} = $dist->{cpanmeta} ? $dist->{cpanmeta}->as_struct : {};
   
       my @config_deps;
   
@@ -3377,7 +3369,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       require App::cpanminus::ParsePM;
   
       my $manifest = eval { ExtUtils::Manifest::manifind() } || {};
-      my @files = grep { /\.pm(?:\.PL)?$/ && $try->($_) } keys %$manifest;
+      my @files = grep { /\.pm(?:\.PL)?$/ && $try->($_) }
+          sort { lc $a cmp lc $b } keys %$manifest;
   
       my $provides = {};
   
@@ -3386,7 +3379,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           my $packages = $parser->parse($file);
   
           while (my($package, $meta) = each %$packages) {
-              $provides->{$package} = {
+              $provides->{$package} ||= {
                   file => $meta->{infile},
                   ($meta->{version} eq 'undef') ? () : (version => $meta->{version}),
               };
