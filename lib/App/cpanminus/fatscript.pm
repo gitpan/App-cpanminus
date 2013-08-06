@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6936";
+  our $VERSION = "1.6937";
   
   =encoding utf8
   
@@ -663,7 +663,8 @@ $fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
                   # warn ">>>>>>>err[$err]<<<<<<<<";
                   if (ref $err) {
                       if ($err->{line} =~ /[\$*]([\w\:\']*)\bVERSION\b.*?\=(.*)/) {
-                          $v = $comp->reval($2);
+                          # $v = $comp->reval($2);
+                          $v = eval "$2";
                       }
                       if ($@) {
                           $self->_verbose(1, sprintf("reval failed: err[%s] for eval[%s]",
@@ -1938,7 +1939,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       $self->setup_local_lib;
   
-      $self->diag(<<DIAG);
+      $self->diag(<<DIAG, 1);
   !
   ! Can't write to $Config{installsitelib} and $Config{installsitebin}: Installing modules to $ENV{HOME}/perl5
   ! To turn off this warning, you have to do one of the following:
@@ -1976,6 +1977,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
   sub _setup_local_lib_env {
       my($self, $base) = @_;
+  
+      $self->diag(<<WARN, 1) if $base =~ /\s/;
+  WARNING: Your lib directory name ($base) contains a space in it. It's known to cause issues with perl builder tools such as local::lib and MakeMaker. You're recommended to rename your directory.
+  WARN
+  
       local $SIG{__WARN__} = sub { }; # catch 'Attempting to write ...'
       local::lib->setup_env_hash_for($base, 0);
   }
@@ -4267,7 +4273,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   use strict;
   use warnings;
   package CPAN::Meta;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   
   use Carp qw(carp croak);
@@ -4613,7 +4619,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 SYNOPSIS
   
@@ -4794,7 +4800,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
     my $copy = $meta->as_struct( \%options );
   
-  This method returns a deep copy of the object's metadata as an unblessed has
+  This method returns a deep copy of the object's metadata as an unblessed hash
   reference.  It takes an optional hashref of options.  If the hashref contains
   a C<version> argument, the copied metadata will be converted to the version
   of the specification and returned.  For example:
@@ -4956,7 +4962,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<http://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta>.
+  at L<https://github.com/Perl-Toolchain-Gang/cpan-meta/issues>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -4964,7 +4970,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<http://github.com/dagolden/cpan-meta>
+  L<https://github.com/dagolden/cpan-meta>
   
     git clone git://github.com/dagolden/cpan-meta.git
   
@@ -5016,6 +5022,10 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =item *
   
+  Karen Etheridge <ether@cpan.org>
+  
+  =item *
+  
   Ken Williams <kwilliams@cpan.org>
   
   =item *
@@ -5040,6 +5050,14 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =item *
   
+  Olaf Alders <olaf@wundersolutions.com>
+  
+  =item *
+  
+  Olivier Mengué <dolmen@cpan.org>
+  
+  =item *
+  
   Randy Sims <randys@thepierianspring.org>
   
   =back
@@ -5057,7 +5075,7 @@ CPAN_META
 $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   package CPAN::Meta::Check;
   {
-    $CPAN::Meta::Check::VERSION = '0.005';
+    $CPAN::Meta::Check::VERSION = '0.007';
   }
   use strict;
   use warnings;
@@ -5089,7 +5107,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   	return if not defined $metadata;
   	my $version = eval { $metadata->version };
   	return "Missing version info for module '$module'" if not $version;
-  	return sprintf 'Installed version (%s) of %s is in range \'%s\'', $version, $module, $$reqs->requirements_for_module($module) if $reqs->accepts_module($module, $version);
+  	return sprintf 'Installed version (%s) of %s is in range \'%s\'', $version, $module, $reqs->requirements_for_module($module) if $reqs->accepts_module($module, $version);
   	return;
   }
   
@@ -5132,11 +5150,12 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   	return grep { defined } values %{ $issues };
   }
   
+  # vi:noet:sts=2:sw=2:ts=2
   1;
   
   #ABSTRACT: Verify requirements in a CPAN::Meta object
   
-  
+  __END__
   
   =pod
   
@@ -5146,7 +5165,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   
   =head1 VERSION
   
-  version 0.005
+  version 0.007
   
   =head1 SYNOPSIS
   
@@ -5160,7 +5179,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   
   =head2 check_requirements($reqs, $type)
   
-  This function checks if all dependencies in C<$reqs> (a L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object) are met, taking into account that 'conflicts' dependencies have to be checked in reverse. It returns a hash with the modules as values and any problems as keys, the value for a succesfully found module will be undef.
+  This function checks if all dependencies in C<$reqs> (a L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object) are met, taking into account that 'conflicts' dependencies have to be checked in reverse. It returns a hash with the modules as keys and any problems as values; the value for a successfully found module will be undef.
   
   =head2 verify_dependencies($meta, $phases, $types, $incdirs)
   
@@ -5168,7 +5187,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   
   =head2 requirements_for($meta, $phases, $types, incdirs)
   
-  This function returns a unified L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object for all C<$type> requirements for C<$phases>. $phases may be either one (scalar) value or an arrayref of valid values as defined by the L<CPAN::Meta spec|CPAN::Meta::Spec>. C<$type> must be a a relationship as defined by the same spec. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
+  This function returns a unified L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object for all C<$type> requirements for C<$phases>. $phases may be either one (scalar) value or an arrayref of valid values as defined by the L<CPAN::Meta spec|CPAN::Meta::Spec>. C<$type> must be a relationship as defined by the same spec. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
   
   =head1 SEE ALSO
   
@@ -5192,10 +5211,6 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   the same terms as the Perl 5 programming language system itself.
   
   =cut
-  
-  
-  __END__
-  
 CPAN_META_CHECK
 
 $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
@@ -5203,7 +5218,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   use strict;
   use warnings;
   package CPAN::Meta::Converter;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   
   use CPAN::Meta::Validator;
@@ -6481,7 +6496,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 SYNOPSIS
   
@@ -6589,68 +6604,6 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   =back
   
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Ansgar Burchardt <ansgar@cpan.org>
-  
-  =item *
-  
-  Avar Arnfjord Bjarmason <avar@cpan.org>
-  
-  =item *
-  
-  Christopher J. Madsen <cjm@cpan.org>
-  
-  =item *
-  
-  Cory G Watson <gphat@cpan.org>
-  
-  =item *
-  
-  Damyan Ivanov <dam@cpan.org>
-  
-  =item *
-  
-  Eric Wilhelm <ewilhelm@cpan.org>
-  
-  =item *
-  
-  Gregor Hermann <gregoa@debian.org>
-  
-  =item *
-  
-  Ken Williams <kwilliams@cpan.org>
-  
-  =item *
-  
-  Kenichi Ishigaki <ishigaki@cpan.org>
-  
-  =item *
-  
-  Lars Dieckow <daxim@cpan.org>
-  
-  =item *
-  
-  Leon Timmermans <leont@cpan.org>
-  
-  =item *
-  
-  Mark Fowler <markf@cpan.org>
-  
-  =item *
-  
-  Michael G. Schwern <mschwern@cpan.org>
-  
-  =item *
-  
-  Randy Sims <randys@thepierianspring.org>
-  
-  =back
-  
   =head1 COPYRIGHT AND LICENSE
   
   This software is copyright (c) 2010 by David Golden and Ricardo Signes.
@@ -6666,7 +6619,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   use strict;
   use warnings;
   package CPAN::Meta::Feature;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   use CPAN::Meta::Prereqs;
   
@@ -6708,7 +6661,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 DESCRIPTION
   
@@ -6765,68 +6718,6 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   
   =back
   
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Ansgar Burchardt <ansgar@cpan.org>
-  
-  =item *
-  
-  Avar Arnfjord Bjarmason <avar@cpan.org>
-  
-  =item *
-  
-  Christopher J. Madsen <cjm@cpan.org>
-  
-  =item *
-  
-  Cory G Watson <gphat@cpan.org>
-  
-  =item *
-  
-  Damyan Ivanov <dam@cpan.org>
-  
-  =item *
-  
-  Eric Wilhelm <ewilhelm@cpan.org>
-  
-  =item *
-  
-  Gregor Hermann <gregoa@debian.org>
-  
-  =item *
-  
-  Ken Williams <kwilliams@cpan.org>
-  
-  =item *
-  
-  Kenichi Ishigaki <ishigaki@cpan.org>
-  
-  =item *
-  
-  Lars Dieckow <daxim@cpan.org>
-  
-  =item *
-  
-  Leon Timmermans <leont@cpan.org>
-  
-  =item *
-  
-  Mark Fowler <markf@cpan.org>
-  
-  =item *
-  
-  Michael G. Schwern <mschwern@cpan.org>
-  
-  =item *
-  
-  Randy Sims <randys@thepierianspring.org>
-  
-  =back
-  
   =head1 COPYRIGHT AND LICENSE
   
   This software is copyright (c) 2010 by David Golden and Ricardo Signes.
@@ -6843,7 +6734,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   use strict;
   use warnings;
   package CPAN::Meta::History;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   1;
   
@@ -6861,7 +6752,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 DESCRIPTION
   
@@ -7145,68 +7036,6 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   
   =back
   
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Ansgar Burchardt <ansgar@cpan.org>
-  
-  =item *
-  
-  Avar Arnfjord Bjarmason <avar@cpan.org>
-  
-  =item *
-  
-  Christopher J. Madsen <cjm@cpan.org>
-  
-  =item *
-  
-  Cory G Watson <gphat@cpan.org>
-  
-  =item *
-  
-  Damyan Ivanov <dam@cpan.org>
-  
-  =item *
-  
-  Eric Wilhelm <ewilhelm@cpan.org>
-  
-  =item *
-  
-  Gregor Hermann <gregoa@debian.org>
-  
-  =item *
-  
-  Ken Williams <kwilliams@cpan.org>
-  
-  =item *
-  
-  Kenichi Ishigaki <ishigaki@cpan.org>
-  
-  =item *
-  
-  Lars Dieckow <daxim@cpan.org>
-  
-  =item *
-  
-  Leon Timmermans <leont@cpan.org>
-  
-  =item *
-  
-  Mark Fowler <markf@cpan.org>
-  
-  =item *
-  
-  Michael G. Schwern <mschwern@cpan.org>
-  
-  =item *
-  
-  Randy Sims <randys@thepierianspring.org>
-  
-  =back
-  
   =head1 COPYRIGHT AND LICENSE
   
   This software is copyright (c) 2010 by David Golden and Ricardo Signes.
@@ -7222,7 +7051,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   use strict;
   use warnings;
   package CPAN::Meta::Prereqs;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   
   use Carp qw(confess);
@@ -7371,7 +7200,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 DESCRIPTION
   
@@ -7479,68 +7308,6 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   =item *
   
   Ricardo Signes <rjbs@cpan.org>
-  
-  =back
-  
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Ansgar Burchardt <ansgar@cpan.org>
-  
-  =item *
-  
-  Avar Arnfjord Bjarmason <avar@cpan.org>
-  
-  =item *
-  
-  Christopher J. Madsen <cjm@cpan.org>
-  
-  =item *
-  
-  Cory G Watson <gphat@cpan.org>
-  
-  =item *
-  
-  Damyan Ivanov <dam@cpan.org>
-  
-  =item *
-  
-  Eric Wilhelm <ewilhelm@cpan.org>
-  
-  =item *
-  
-  Gregor Hermann <gregoa@debian.org>
-  
-  =item *
-  
-  Ken Williams <kwilliams@cpan.org>
-  
-  =item *
-  
-  Kenichi Ishigaki <ishigaki@cpan.org>
-  
-  =item *
-  
-  Lars Dieckow <daxim@cpan.org>
-  
-  =item *
-  
-  Leon Timmermans <leont@cpan.org>
-  
-  =item *
-  
-  Mark Fowler <markf@cpan.org>
-  
-  =item *
-  
-  Michael G. Schwern <mschwern@cpan.org>
-  
-  =item *
-  
-  Randy Sims <randys@thepierianspring.org>
   
   =back
   
@@ -8286,16 +8053,23 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
 CPAN_META_REQUIREMENTS
 
 $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
-  # vi:tw=72
+  # XXX RULES FOR PATCHING THIS FILE XXX
+  # Patches that fix typos or formatting are acceptable.  Patches
+  # that change semantics are not acceptable without prior approval
+  # by David Golden or Ricardo Signes.
+  
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta::Spec;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   1;
   
   # ABSTRACT: specification for CPAN distribution metadata
+  
+  
+  # vi:tw=72
   
   __END__
   
@@ -8309,7 +8083,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 SYNOPSIS
   
@@ -8874,7 +8648,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   distribution to specify a dependency on an optional feature of another
   dependency, the use of C<optional_feature> is discouraged.  Instead,
   create a separate, installable distribution that ensures the desired
-  feature is available.  For example, if C<Foo::Bar> has a "Baz" feature,
+  feature is available.  For example, if C<Foo::Bar> has a C<Baz> feature,
   release a separate C<Foo-Bar-Baz> distribution that satisfies
   requirements for the feature.
   
@@ -8928,14 +8702,14 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
     provides => {
       'Foo::Bar' => {
         file    => 'lib/Foo/Bar.pm',
-        version => 0.27_02
+        version => '0.27_02',
       },
       'Foo::Bar::Blah' => {
         file    => 'lib/Foo/Bar/Blah.pm',
       },
       'Foo::Bar::Baz' => {
         file    => 'lib/Foo/Bar/Baz.pm',
-        version => 0.3,
+        version => '0.3',
       },
     }
   
@@ -9023,7 +8797,8 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   Because a url like C<http://myrepo.example.com/> is ambiguous as to
   type, producers should provide a C<type> whenever a C<url> key is given.
   The C<type> field should be the name of the most common program used
-  to work with the repository, e.g. git, svn, cvs, darcs, bzr or hg.
+  to work with the repository, e.g. C<git>, C<svn>, C<cvs>, C<darcs>,
+  C<bzr> or C<hg>.
   
   =back
   
@@ -9284,7 +9059,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   Another subtle error that can occur in resolving prerequisites comes from
   the way that modules in prerequisites are indexed to distribution files on
   CPAN.  When a module is deleted from a distribution, prerequisites calling
-  for that module could indicate an older distribution should installed,
+  for that module could indicate an older distribution should be installed,
   potentially overwriting files from a newer distribution.
   
   For example, as of Oct 31, 2009, the CPAN index file contained these
@@ -9428,68 +9203,6 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =back
   
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Ansgar Burchardt <ansgar@cpan.org>
-  
-  =item *
-  
-  Avar Arnfjord Bjarmason <avar@cpan.org>
-  
-  =item *
-  
-  Christopher J. Madsen <cjm@cpan.org>
-  
-  =item *
-  
-  Cory G Watson <gphat@cpan.org>
-  
-  =item *
-  
-  Damyan Ivanov <dam@cpan.org>
-  
-  =item *
-  
-  Eric Wilhelm <ewilhelm@cpan.org>
-  
-  =item *
-  
-  Gregor Hermann <gregoa@debian.org>
-  
-  =item *
-  
-  Ken Williams <kwilliams@cpan.org>
-  
-  =item *
-  
-  Kenichi Ishigaki <ishigaki@cpan.org>
-  
-  =item *
-  
-  Lars Dieckow <daxim@cpan.org>
-  
-  =item *
-  
-  Leon Timmermans <leont@cpan.org>
-  
-  =item *
-  
-  Mark Fowler <markf@cpan.org>
-  
-  =item *
-  
-  Michael G. Schwern <mschwern@cpan.org>
-  
-  =item *
-  
-  Randy Sims <randys@thepierianspring.org>
-  
-  =back
-  
   =head1 COPYRIGHT AND LICENSE
   
   This software is copyright (c) 2010 by David Golden and Ricardo Signes.
@@ -9505,7 +9218,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   use strict;
   use warnings;
   package CPAN::Meta::Validator;
-  our $VERSION = '2.131560'; # VERSION
+  our $VERSION = '2.132140'; # VERSION
   
   
   #--------------------------------------------------------------------------#
@@ -10343,7 +10056,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
   =head1 VERSION
   
-  version 2.131560
+  version 2.132140
   
   =head1 SYNOPSIS
   
@@ -10543,68 +10256,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   =item *
   
   Ricardo Signes <rjbs@cpan.org>
-  
-  =back
-  
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Ansgar Burchardt <ansgar@cpan.org>
-  
-  =item *
-  
-  Avar Arnfjord Bjarmason <avar@cpan.org>
-  
-  =item *
-  
-  Christopher J. Madsen <cjm@cpan.org>
-  
-  =item *
-  
-  Cory G Watson <gphat@cpan.org>
-  
-  =item *
-  
-  Damyan Ivanov <dam@cpan.org>
-  
-  =item *
-  
-  Eric Wilhelm <ewilhelm@cpan.org>
-  
-  =item *
-  
-  Gregor Hermann <gregoa@debian.org>
-  
-  =item *
-  
-  Ken Williams <kwilliams@cpan.org>
-  
-  =item *
-  
-  Kenichi Ishigaki <ishigaki@cpan.org>
-  
-  =item *
-  
-  Lars Dieckow <daxim@cpan.org>
-  
-  =item *
-  
-  Leon Timmermans <leont@cpan.org>
-  
-  =item *
-  
-  Mark Fowler <markf@cpan.org>
-  
-  =item *
-  
-  Michael G. Schwern <mschwern@cpan.org>
-  
-  =item *
-  
-  Randy Sims <randys@thepierianspring.org>
   
   =back
   
@@ -16944,7 +16595,7 @@ $fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
   use Module::CPANfile::Environment;
   use Module::CPANfile::Result;
   
-  our $VERSION = '0.9036';
+  our $VERSION = '1.0001';
   
   sub new {
       my($class, $file) = @_;
@@ -19371,7 +19022,7 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   use File::Path ();
   use Config;
   
-  our $VERSION = '1.008010'; # 1.8.10
+  our $VERSION = '1.008011'; # 1.8.11
   
   our @KNOWN_FLAGS = qw(--self-contained --deactivate --deactivate-all);
   
@@ -20382,6 +20033,14 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   commands to add to the shell configuration file.
   
   On Win32 systems, C<COMSPEC> is also examined.
+  
+  =back
+  
+  =head1 SEE ALSO
+  
+  =over 4
+  
+  =item * L<Perl Advent article, 2011|http://perladvent.org/2011/2011-12-01.html>
   
   =back
   
