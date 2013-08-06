@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6938";
+  our $VERSION = "1.6939";
   
   =encoding utf8
   
@@ -827,7 +827,7 @@ $fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
           while (<FH>) {
               $inpod = /^=(?!cut)/ ? 1 : /^=cut/ ? 0 : $inpod;
               next if $inpod || /^\s*#/;
-              last if /\b__(?:END|DATA)__\b/; # fails on quoted __END__ but this is rare
+              # last if /\b__(?:END|DATA)__\b/; # fails on quoted __END__ but this is rare
               chop;
               # next unless /\$(([\w\:\']*)\bVERSION)\b.*\=/;
               next unless /([\$*])(([\w\:\']*)\bVERSION)\b.*\=/;
