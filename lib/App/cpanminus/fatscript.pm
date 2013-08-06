@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6937";
+  our $VERSION = "1.6938";
   
   =encoding utf8
   
@@ -664,6 +664,7 @@ $fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
                   if (ref $err) {
                       if ($err->{line} =~ /[\$*]([\w\:\']*)\bVERSION\b.*?\=(.*)/) {
                           # $v = $comp->reval($2);
+                          local *qv = \&version::qv; # equiv. of $comp->share_from('version', ['&qv']);
                           $v = eval "$2";
                       }
                       if ($@) {
