@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6940";
+  our $VERSION = "1.6941";
   
   =encoding utf8
   
@@ -1198,7 +1198,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'n|notest!' => \$self->{notest},
           'test-only' => sub { $self->{notest} = 0; $self->{skip_installed} = 0; $self->{test_only} = 1 },
           'S|sudo!'   => \$self->{sudo},
-          'v|verbose' => sub { $self->{verbose} = $self->{interactive} = 1 },
+          'v|verbose' => \$self->{verbose},
           'verify!'   => \$self->{verify},
           'q|quiet!'  => \$self->{quiet},
           'h|help'    => sub { $self->{action} = 'show_help' },
