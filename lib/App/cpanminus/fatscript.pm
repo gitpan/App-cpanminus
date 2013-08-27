@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6941";
+  our $VERSION = "1.6942";
   
   =encoding utf8
   
@@ -1608,17 +1608,27 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       return @filters;
   }
   
-  sub by_stability {
+  sub by_version {
       my %s = qw( latest 3  cpan 2  backpan 1 );
       $b->{_score} <=> $a->{_score} ||                             # version: higher version that satisfies the query
-      $s{ $b->{fields}{status} } <=> $s{ $a->{fields}{status} } || # prefer non-BackPAN dist
+      $s{ $b->{fields}{status} } <=> $s{ $a->{fields}{status} };   # prefer non-BackPAN dist
+  }
+  
+  sub by_first_come {
       $a->{fields}{date} cmp $b->{fields}{date};                   # first one wins, if all are in BackPAN/CPAN
+  }
+  
+  sub by_date {
+      $b->{fields}{date} cmp $a->{fields}{date};                   # prefer new uploads, when searching for dev
   }
   
   sub find_best_match {
       my($self, $match, $version) = @_;
       return unless $match && @{$match->{hits}{hits} || []};
-      (sort by_stability @{$match->{hits}{hits}})[0]->{fields};
+      my @hits = $self->{dev_release}
+          ? sort { by_version || by_date } @{$match->{hits}{hits}}
+          : sort { by_version || by_first_come } @{$match->{hits}{hits}};
+      $hits[0]->{fields};
   }
   
   sub search_metacpan {
@@ -3100,7 +3110,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           $self->chat("Checking configure dependencies from $meta_file\n");
           $dist->{cpanmeta} = eval { CPAN::Meta->load_file($meta_file) };
       } elsif ($dist->{dist} && $dist->{version}) {
-          $self->chat("META.yml/json not found. Creating skelton for it.\n");
+          $self->chat("META.yml/json not found. Creating skeleton for it.\n");
           $dist->{cpanmeta} = CPAN::Meta->new({ name => $dist->{dist}, version => $dist->{version} });
       }
   
