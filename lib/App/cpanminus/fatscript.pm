@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6942";
+  our $VERSION = "1.6943";
   
   =encoding utf8
   
@@ -2219,8 +2219,10 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       my $use_default = !$self->{interactive};
       local $ENV{PERL_MM_USE_DEFAULT} = $use_default;
   
-      # skip man page generation
       local $ENV{PERL_MM_OPT} = $ENV{PERL_MM_OPT};
+      local $ENV{PERL_MB_OPT} = $ENV{PERL_MB_OPT};
+  
+      # skip man page generation
       unless ($self->{pod2man}) {
           $ENV{PERL_MM_OPT} .= " INSTALLMAN1DIR=none INSTALLMAN3DIR=none";
           $ENV{PERL_MB_OPT} .= " --config installman1dir= --config installsiteman1dir= --config installman3dir= --config installsiteman3dir=";
@@ -17087,7 +17089,7 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   
   use strict;
   use vars qw($VERSION);
-  $VERSION = '1.000014';
+  $VERSION = '1.000016';
   $VERSION = eval $VERSION;
   
   use Carp qw/croak/;
@@ -17421,7 +17423,7 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
       }
   
       # Normalize versions.  Can't use exists() here because of bug in YAML::Node.
-      # XXX "bug in YAML::Node" comment seems irrelvant -- dagolden, 2009-05-18
+      # XXX "bug in YAML::Node" comment seems irrelevant -- dagolden, 2009-05-18
       for (grep defined $_->{version}, values %prime) {
         $_->{version} = $normalize_version->( $_->{version} );
       }
@@ -17876,8 +17878,10 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   
   =head1 DESCRIPTION
   
-  This module provides a standard way to gather metadata about a .pm file
-  without executing unsafe code.
+  This module provides a standard way to gather metadata about a .pm file through
+  (mostly) static analysis and (some) code execution.  When determining the
+  version of a module, the C<$VERSION> assignment is C<eval>ed, as is traditional
+  in the CPAN toolchain.
   
   =head1 USAGE
   
