@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.6943";
+  our $VERSION = "1.7000";
   
   =encoding utf8
   
@@ -7355,7 +7355,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   use strict;
   use warnings;
   package CPAN::Meta::Requirements;
-  our $VERSION = '2.122'; # VERSION
+  our $VERSION = '2.123'; # VERSION
   # ABSTRACT: a set of version requirements for a CPAN dist
   
   
@@ -7787,7 +7787,10 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   # vim: ts=2 sts=2 sw=2 et:
   
   __END__
+  
   =pod
+  
+  =encoding utf-8
   
   =head1 NAME
   
@@ -7795,7 +7798,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   
   =head1 VERSION
   
-  version 2.122
+  version 2.123
   
   =head1 SYNOPSIS
   
@@ -8045,7 +8048,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<http://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta-Requirements>.
+  at L<https://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta-Requirements>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -8055,7 +8058,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   
   L<https://github.com/dagolden/cpan-meta-requirements>
   
-    git clone https://github.com/dagolden/cpan-meta-requirements.git
+    git clone git://github.com/dagolden/cpan-meta-requirements.git
   
   =head1 AUTHORS
   
@@ -8079,7 +8082,6 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   the same terms as the Perl 5 programming language system itself.
   
   =cut
-  
 CPAN_META_REQUIREMENTS
 
 $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
