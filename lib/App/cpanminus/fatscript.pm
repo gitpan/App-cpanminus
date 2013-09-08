@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7000";
+  our $VERSION = "1.7001";
   
   =encoding utf8
   
@@ -2372,13 +2372,13 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   sub install_module {
       my($self, $module, $depth, $version) = @_;
   
+      $self->check_libs;
+  
       if ($self->{seen}{$module}++) {
           # TODO: circular dependencies
           $self->chat("Already tried $module. Skipping.\n");
           return 1;
       }
-  
-      $self->check_libs;
   
       if ($self->{skip_satisfied}) {
           my($ok, $local) = $self->check_module($module, $version || 0);
@@ -3132,7 +3132,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       # workaround for bad M::B based dists with no configure_requires
       # https://github.com/miyagawa/cpanminus/issues/273
-      if (-e 'Build.PL') {
+      if (-e 'Build.PL' && !$self->should_use_mm($dist->{dist})) {
           push @config_deps, Dependency->from_versions(
               { 'Module::Build' => '0.36' }, 'configure',
           );
@@ -3271,6 +3271,16 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       return @perl;
   }
   
+  sub should_use_mm {
+      my($self, $dist) = @_;
+  
+      # Module::Build deps should use MakeMaker because that causes circular deps and fail
+      # Otherwise we should prefer Build.PL
+      my %should_use_mm = map { $_ => 1 } qw( version ExtUtils-ParseXS ExtUtils-Install ExtUtils-Manifest );
+  
+      $should_use_mm{$dist};
+  }
+  
   sub configure_this {
       my($self, $dist, $depth) = @_;
   
@@ -3323,12 +3333,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           }
       };
   
-      # Module::Build deps should use MakeMaker because that causes circular deps and fail
-      # Otherwise we should prefer Build.PL
-      my %should_use_mm = map { $_ => 1 } qw( version ExtUtils-ParseXS ExtUtils-Install ExtUtils-Manifest );
-  
       my @try;
-      if ($dist->{dist} && $should_use_mm{$dist->{dist}}) {
+      if ($dist->{dist} && $self->should_use_mm($dist->{dist})) {
           @try = ($try_eumm, $try_mb);
       } else {
           @try = ($try_mb, $try_eumm);
@@ -4303,7 +4309,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   use strict;
   use warnings;
   package CPAN::Meta;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   
   use Carp qw(carp croak);
@@ -4649,7 +4655,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -4992,7 +4998,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<https://github.com/Perl-Toolchain-Gang/cpan-meta/issues>.
+  at L<https://github.com/Perl-Toolchain-Gang/CPAN-Meta/issues>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -5000,9 +5006,9 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<https://github.com/dagolden/cpan-meta>
+  L<https://github.com/Perl-Toolchain-Gang/CPAN-Meta>
   
-    git clone git://github.com/dagolden/cpan-meta.git
+    git clone https://github.com/Perl-Toolchain-Gang/CPAN-Meta.git
   
   =head1 AUTHORS
   
@@ -5248,7 +5254,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   use strict;
   use warnings;
   package CPAN::Meta::Converter;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   
   use CPAN::Meta::Validator;
@@ -6526,7 +6532,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -6649,7 +6655,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   use strict;
   use warnings;
   package CPAN::Meta::Feature;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   use CPAN::Meta::Prereqs;
   
@@ -6691,7 +6697,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 DESCRIPTION
   
@@ -6764,7 +6770,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   use strict;
   use warnings;
   package CPAN::Meta::History;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   1;
   
@@ -6782,7 +6788,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 DESCRIPTION
   
@@ -7081,7 +7087,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   use strict;
   use warnings;
   package CPAN::Meta::Prereqs;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   
   use Carp qw(confess);
@@ -7230,7 +7236,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 DESCRIPTION
   
@@ -8094,7 +8100,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   use strict;
   use warnings;
   package CPAN::Meta::Spec;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   1;
   
@@ -8115,7 +8121,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -9193,7 +9199,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   YAML, L<http://www.yaml.org/>
   
-  =head1 CONTRIBUTORS
+  =head1 HISTORY
   
   Ken Williams wrote the original CPAN Meta Spec (also known as the
   "META.yml spec") in 2003 and maintained it through several revisions
@@ -9205,21 +9211,6 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   process.  David and Ricardo Signes drafted the final version 2 spec
   in April 2010 based on the version 1.4 spec and patches contributed
   during the proposal process.
-  
-  Several others have contributed patches over the years.  The full list
-  of contributors in the repository history currently includes:
-  
-    2shortplanks
-    Avar Arnfjord Bjarmason
-    Christopher J. Madsen
-    Damyan Ivanov
-    David Golden
-    Eric Wilhelm
-    Ken Williams
-    Lars DIECKOW
-    Michael G. Schwern
-    Randy Sims
-    Ricardo Signes
   
   =head1 AUTHORS
   
@@ -9250,7 +9241,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   use strict;
   use warnings;
   package CPAN::Meta::Validator;
-  our $VERSION = '2.132140'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   
   #--------------------------------------------------------------------------#
@@ -10088,7 +10079,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
   =head1 VERSION
   
-  version 2.132140
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -16627,7 +16618,7 @@ $fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
   use Module::CPANfile::Environment;
   use Module::CPANfile::Result;
   
-  our $VERSION = '1.0001';
+  our $VERSION = '1.0002';
   
   sub new {
       my($class, $file) = @_;
@@ -18096,7 +18087,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   use strict;
   package Parse::CPAN::Meta;
   # ABSTRACT: Parse META.yml and META.json CPAN metadata files
-  our $VERSION = '1.4405'; # VERSION
+  our $VERSION = '1.4407'; # VERSION
   
   use Carp 'croak';
   
@@ -18231,7 +18222,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =head1 VERSION
   
-  version 1.4405
+  version 1.4407
   
   =head1 SYNOPSIS
   
@@ -18366,7 +18357,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<https://rt.cpan.org/Public/Dist/Display.html?Name=Parse-CPAN-Meta>.
+  at L<http://rt.cpan.org/Public/Dist/Display.html?Name=Parse-CPAN-Meta>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -18374,13 +18365,23 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<http://github.com/Perl-Toolchain-Gang/Parse-CPAN-Meta>
+  L<https://github.com/Perl-Toolchain-Gang/Parse-CPAN-Meta>
   
-    git clone git://github.com/Perl-Toolchain-Gang/Parse-CPAN-Meta.git
+    git clone https://github.com/Perl-Toolchain-Gang/Parse-CPAN-Meta.git
   
-  =head1 AUTHOR
+  =head1 AUTHORS
+  
+  =over 4
+  
+  =item *
   
   Adam Kennedy <adamk@cpan.org>
+  
+  =item *
+  
+  David Golden <dagolden@cpan.org>
+  
+  =back
   
   =head1 CONTRIBUTORS
   
@@ -18388,11 +18389,11 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =item *
   
-  David Golden <dagolden@cpan.org>
+  Joshua ben Jore <jjore@cpan.org>
   
   =item *
   
-  Joshua ben Jore <jjore@cpan.org>
+  Neil Bowers <neil@bowers.com>
   
   =item *
   
