@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7001";
+  our $VERSION = "1.7100";
   
   =encoding utf8
   
@@ -1203,7 +1203,10 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'q|quiet!'  => \$self->{quiet},
           'h|help'    => sub { $self->{action} = 'show_help' },
           'V|version' => sub { $self->{action} = 'show_version' },
-          'perl=s'    => \$self->{perl},
+          'perl=s'    => sub {
+              $self->diag("--perl is deprecated since it's known to be fragile in figuring out dependencies. Run `$_[1] -S cpanm` instead.\n", 1);
+              $self->{perl} = $_[1];
+          },
           'l|local-lib=s' => sub { $self->{local_lib} = $self->maybe_abs($_[1]) },
           'L|local-lib-contained=s' => sub {
               $self->{local_lib} = $self->maybe_abs($_[1]);
@@ -2781,6 +2784,11 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   sub resolve_name {
       my($self, $module, $version) = @_;
   
+      # Git
+      if ($module =~ /(?:^git(?:\+\w+)?:|\.git(?:@.+)?$)/) {
+          return $self->git_uri($module);
+      }
+  
       # URL
       if ($module =~ /^(ftp|https?|file):/) {
           if ($module =~ m!authors/id/(.*)!) {
@@ -2804,11 +2812,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
               source => 'local',
               uris => [ "file://" . Cwd::abs_path($module) ],
           };
-      }
-  
-      # Git
-      if ($module =~ /(?:^git:|\.git(?:@.+)?$)/) {
-          return $self->git_uri($module);
       }
   
       # cpan URI
@@ -2870,6 +2873,9 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       # git URL has to end with .git when you need to use pin @ commit/tag/branch
   
       ($uri, my $commitish) = split /(?<=\.git)@/i, $uri, 2;
+  
+      # git CLI doesn't support git+http:// etc.
+      $uri =~ s/^git\+//;
   
       my $dir = File::Temp::tempdir(CLEANUP => 1);
   
@@ -21437,23 +21443,6 @@ Download and unpack the distribution and then open the directory with
 your shell. Handy to poke around the source code or do manual
 testing.
 
-=item -U, --uninstall
-
-B<EXPERIMENTAL>: Uninstalls the modules. Will remove the distribution
-files from your library path using the C<.packlist> file.
-
-When used with C<-l> or C<-L>, only the files under the local::lib
-directory will be removed.
-
-B<NOTE>: If you have the "dual-life" module in multiple locations
-(i.e. C<site_perl> and C<perl> library path, with perl 5.12 or later),
-only the files in C<site_perl> will be deleted.
-
-If the distribution has bin scripts and man, they will be kept in case
-the core installation still references that, although there's no
-guarantee that the script will continue working as expected with the
-older version of .pm files.
-
 =item -h, --help
 
 Displays the help message.
@@ -21532,6 +21521,10 @@ would install Plack and all of its non-core dependencies into the
 directory C<extlib>, which can be loaded from your application with:
 
   use local::lib '/path/to/extlib';
+
+Note that this option does B<NOT> reliably work with perl
+installations supplied by operating system vendors that strips
+standard modules from perl, such as RHEL, Fedora and CentOS.
 
 =item --self-contained
 
@@ -21781,7 +21774,7 @@ directory.
 If you try to uninstall a module in C<perl> directory (i.e. core
 module), an error will be thrown.
 
-A dialog wil be prompted to confirm the files to be deleted. If you pass
+A dialog will be prompted to confirm the files to be deleted. If you pass
 C<-f> option as well, the dialog will be skipped and uninstallation
 will be forced.
 
