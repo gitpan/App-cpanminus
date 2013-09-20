@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7101";
+  our $VERSION = "1.7102";
   
   =encoding utf8
   
@@ -2391,7 +2391,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           }
       }
   
-      my $dist = $self->resolve_name($module, $version);
+      my $dist = $self->resolve_name($module, $version, 1);
       unless ($dist) {
           my $what = $module . ($version ? " ($version)" : "");
           $self->diag_fail("Couldn't find module or a distribution $what", 1);
@@ -2782,7 +2782,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   }
   
   sub resolve_name {
-      my($self, $module, $version) = @_;
+      my($self, $module, $version, $allow_file) = @_;
   
       # Git
       if ($module =~ /(?:^git(?:\+\w+)?:|\.git(?:@.+)?$)/) {
@@ -2799,7 +2799,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       # Directory
-      if ($module =~ m!^[\./]! && -d $module) {
+      if ($allow_file && $module =~ m!^[\./]! && -d $module) {
           return {
               source => 'local',
               dir => Cwd::abs_path($module),
@@ -2807,7 +2807,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       # File
-      if (-f $module) {
+      if ($allow_file && -f $module) {
           return {
               source => 'local',
               uris => [ "file://" . Cwd::abs_path($module) ],
@@ -2832,7 +2832,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   sub cpan_module {
       my($self, $module, $dist, $version) = @_;
   
-      my $dist = $self->cpan_dist($dist);
+      my $dist = $self->resolve_name($dist, undef, 0);
       $dist->{module} = $module;
       $dist->{module_version} = $version if $version && $version ne 'undef';
   
