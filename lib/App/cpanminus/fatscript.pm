@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7002";
+  our $VERSION = "1.7003";
   
   =encoding utf8
   
@@ -4310,81 +4310,18 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   use strict;
   use warnings;
   package CPAN::Meta;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
-  # =head1 SYNOPSIS
-  #
-  #     use v5.10;
-  #     use strict;
-  #     use warnings;
-  #     use CPAN::Meta;
-  #     use Module::Load;
-  #
-  #     my $meta = CPAN::Meta->load_file('META.json');
-  #
-  #     printf "testing requirements for %s version %s\n",
-  #     $meta->name,
-  #     $meta->version;
-  #
-  #     my $prereqs = $meta->effective_prereqs;
-  #
-  #     for my $phase ( qw/configure runtime build test/ ) {
-  #         say "Requirements for $phase:";
-  #         my $reqs = $prereqs->requirements_for($phase, "requires");
-  #         for my $module ( sort $reqs->required_modules ) {
-  #             my $status;
-  #             if ( eval { load $module unless $module eq 'perl'; 1 } ) {
-  #                 my $version = $module eq 'perl' ? $] : $module->VERSION;
-  #                 $status = $reqs->accepts_module($module, $version)
-  #                         ? "$version ok" : "$version not ok";
-  #             } else {
-  #                 $status = "missing"
-  #             };
-  #             say "  $module ($status)";
-  #         }
-  #     }
-  #
-  # =head1 DESCRIPTION
-  #
-  # Software distributions released to the CPAN include a F<META.json> or, for
-  # older distributions, F<META.yml>, which describes the distribution, its
-  # contents, and the requirements for building and installing the distribution.
-  # The data structure stored in the F<META.json> file is described in
-  # L<CPAN::Meta::Spec>.
-  #
-  # CPAN::Meta provides a simple class to represent this distribution metadata (or
-  # I<distmeta>), along with some helpful methods for interrogating that data.
-  #
-  # The documentation below is only for the methods of the CPAN::Meta object.  For
-  # information on the meaning of individual fields, consult the spec.
-  #
-  # =cut
   
   use Carp qw(carp croak);
   use CPAN::Meta::Feature;
   use CPAN::Meta::Prereqs;
   use CPAN::Meta::Converter;
   use CPAN::Meta::Validator;
-  use Parse::CPAN::Meta 1.4414 ();
+  use Parse::CPAN::Meta 1.4403 ();
   
   BEGIN { *_dclone = \&CPAN::Meta::Converter::_dclone }
   
-  # =head1 STRING DATA
-  #
-  # The following methods return a single value, which is the value for the
-  # corresponding entry in the distmeta structure.  Values should be either undef
-  # or strings.
-  #
-  # =for :list
-  # * abstract
-  # * description
-  # * dynamic_config
-  # * generated_by
-  # * name
-  # * release_status
-  # * version
-  #
-  # =cut
   
   BEGIN {
     my @STRING_READERS = qw(
@@ -4403,20 +4340,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     }
   }
   
-  # =head1 LIST DATA
-  #
-  # These methods return lists of string values, which might be represented in the
-  # distmeta structure as arrayrefs or scalars:
-  #
-  # =for :list
-  # * authors
-  # * keywords
-  # * licenses
-  #
-  # The C<authors> and C<licenses> methods may also be called as C<author> and
-  # C<license>, respectively, to match the field name in the distmeta structure.
-  #
-  # =cut
   
   BEGIN {
     my @LIST_READERS = qw(
@@ -4440,20 +4363,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   sub authors  { $_[0]->author }
   sub licenses { $_[0]->license }
   
-  # =head1 MAP DATA
-  #
-  # These readers return hashrefs of arbitrary unblessed data structures, each
-  # described more fully in the specification:
-  #
-  # =for :list
-  # * meta_spec
-  # * resources
-  # * provides
-  # * no_index
-  # * prereqs
-  # * optional_features
-  #
-  # =cut
   
   BEGIN {
     my @MAP_READERS = qw(
@@ -4477,16 +4386,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     }
   }
   
-  # =head1 CUSTOM DATA
-  #
-  # A list of custom keys are available from the C<custom_keys> method and
-  # particular keys may be retrieved with the C<custom> method.
-  #
-  #   say $meta->custom($_) for $meta->custom_keys;
-  #
-  # If a custom key refers to a data structure, a deep clone is returned.
-  #
-  # =cut
   
   sub custom_keys {
     return grep { /^x_/i } keys %{$_[0]};
@@ -4499,29 +4398,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $value;
   }
   
-  # =method new
-  #
-  #   my $meta = CPAN::Meta->new($distmeta_struct, \%options);
-  #
-  # Returns a valid CPAN::Meta object or dies if the supplied metadata hash
-  # reference fails to validate.  Older-format metadata will be up-converted to
-  # version 2 if they validate against the original stated specification.
-  #
-  # It takes an optional hashref of options. Valid options include:
-  #
-  # =over
-  #
-  # =item *
-  #
-  # lazy_validation -- if true, new will attempt to convert the given metadata
-  # to version 2 before attempting to validate it.  This means than any
-  # fixable errors will be handled by CPAN::Meta::Converter before validation.
-  # (Note that this might result in invalid optional data being silently
-  # dropped.)  The default is false.
-  #
-  # =back
-  #
-  # =cut
   
   sub _new {
     my ($class, $struct, $options) = @_;
@@ -4562,15 +4438,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $self;
   }
   
-  # =method create
-  #
-  #   my $meta = CPAN::Meta->create($distmeta_struct, \%options);
-  #
-  # This is same as C<new()>, except that C<generated_by> and C<meta-spec> fields
-  # will be generated if not provided.  This means the metadata structure is
-  # assumed to otherwise follow the latest L<CPAN::Meta::Spec>.
-  #
-  # =cut
   
   sub create {
     my ($class, $struct, $options) = @_;
@@ -4582,19 +4449,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $self;
   }
   
-  # =method load_file
-  #
-  #   my $meta = CPAN::Meta->load_file($distmeta_file, \%options);
-  #
-  # Given a pathname to a file containing metadata, this deserializes the file
-  # according to its file suffix and constructs a new C<CPAN::Meta> object, just
-  # like C<new()>.  It will die if the deserialized version fails to validate
-  # against its stated specification version.
-  #
-  # It takes the same options as C<new()> but C<lazy_validation> defaults to
-  # true.
-  #
-  # =cut
   
   sub load_file {
     my ($class, $file, $options) = @_;
@@ -4612,14 +4466,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $self;
   }
   
-  # =method load_yaml_string
-  #
-  #   my $meta = CPAN::Meta->load_yaml_string($yaml, \%options);
-  #
-  # This method returns a new CPAN::Meta object using the first document in the
-  # given YAML string.  In other respects it is identical to C<load_file()>.
-  #
-  # =cut
   
   sub load_yaml_string {
     my ($class, $yaml, $options) = @_;
@@ -4634,14 +4480,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $self;
   }
   
-  # =method load_json_string
-  #
-  #   my $meta = CPAN::Meta->load_json_string($json, \%options);
-  #
-  # This method returns a new CPAN::Meta object using the structure represented by
-  # the given JSON string.  In other respects it is identical to C<load_file()>.
-  #
-  # =cut
   
   sub load_json_string {
     my ($class, $json, $options) = @_;
@@ -4656,50 +4494,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $self;
   }
   
-  # =method load_string
-  #
-  #   my $meta = CPAN::Meta->load_string($string, \%options);
-  #
-  # If you don't know if a string contains YAML or JSON, this method will use
-  # L<Parse::CPAN::Meta> to guess.  In other respects it is identical to
-  # C<load_file()>.
-  #
-  # =cut
-  
-  sub load_string {
-    my ($class, $string, $options) = @_;
-    $options->{lazy_validation} = 1 unless exists $options->{lazy_validation};
-  
-    my $self;
-    eval {
-      my $struct = Parse::CPAN::Meta->load_string( $string );
-      $self = $class->_new($struct, $options);
-    };
-    croak($@) if $@;
-    return $self;
-  }
-  
-  # =method save
-  #
-  #   $meta->save($distmeta_file, \%options);
-  #
-  # Serializes the object as JSON and writes it to the given file.  The only valid
-  # option is C<version>, which defaults to '2'. On Perl 5.8.1 or later, the file
-  # is saved with UTF-8 encoding.
-  #
-  # For C<version> 2 (or higher), the filename should end in '.json'.  L<JSON::PP>
-  # is the default JSON backend. Using another JSON backend requires L<JSON> 2.5 or
-  # later and you must set the C<$ENV{PERL_JSON_BACKEND}> to a supported alternate
-  # backend like L<JSON::XS>.
-  #
-  # For C<version> less than 2, the filename should end in '.yml'.
-  # L<CPAN::Meta::Converter> is used to generate an older metadata structure, which
-  # is serialized to YAML.  CPAN::Meta::YAML is the default YAML backend.  You may
-  # set the C<$ENV{PERL_YAML_BACKEND}> to a supported alternative backend, though
-  # this is not recommended due to subtle incompatibilities between YAML parsers on
-  # CPAN.
-  #
-  # =cut
   
   sub save {
     my ($self, $file, $options) = @_;
@@ -4727,32 +4521,12 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return 1;
   }
   
-  # =method meta_spec_version
-  #
-  # This method returns the version part of the C<meta_spec> entry in the distmeta
-  # structure.  It is equivalent to:
-  #
-  #   $meta->meta_spec->{version};
-  #
-  # =cut
   
   sub meta_spec_version {
     my ($self) = @_;
     return $self->meta_spec->{version};
   }
   
-  # =method effective_prereqs
-  #
-  #   my $prereqs = $meta->effective_prereqs;
-  #
-  #   my $prereqs = $meta->effective_prereqs( \@feature_identifiers );
-  #
-  # This method returns a L<CPAN::Meta::Prereqs> object describing all the
-  # prereqs for the distribution.  If an arrayref of feature identifiers is given,
-  # the prereqs for the identified features are merged together with the
-  # distribution's core prereqs before the CPAN::Meta::Prereqs object is returned.
-  #
-  # =cut
   
   sub effective_prereqs {
     my ($self, $features) = @_;
@@ -4767,17 +4541,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $prereq->with_merged_prereqs(\@other);
   }
   
-  # =method should_index_file
-  #
-  #   ... if $meta->should_index_file( $filename );
-  #
-  # This method returns true if the given file should be indexed.  It decides this
-  # by checking the C<file> and C<directory> keys in the C<no_index> property of
-  # the distmeta structure.
-  #
-  # C<$filename> should be given in unix format.
-  #
-  # =cut
   
   sub should_index_file {
     my ($self, $filename) = @_;
@@ -4794,15 +4557,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return 1;
   }
   
-  # =method should_index_package
-  #
-  #   ... if $meta->should_index_package( $package );
-  #
-  # This method returns true if the given package should be indexed.  It decides
-  # this by checking the C<package> and C<namespace> keys in the C<no_index>
-  # property of the distmeta structure.
-  #
-  # =cut
   
   sub should_index_package {
     my ($self, $package) = @_;
@@ -4818,14 +4572,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return 1;
   }
   
-  # =method features
-  #
-  #   my @feature_objects = $meta->features;
-  #
-  # This method returns a list of L<CPAN::Meta::Feature> objects, one for each
-  # optional feature described by the distribution's metadata.
-  #
-  # =cut
   
   sub features {
     my ($self) = @_;
@@ -4837,15 +4583,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return @features;
   }
   
-  # =method feature
-  #
-  #   my $feature_object = $meta->feature( $identifier );
-  #
-  # This method returns a L<CPAN::Meta::Feature> object for the optional feature
-  # with the given identifier.  If no feature with that identifier exists, an
-  # exception will be raised.
-  #
-  # =cut
   
   sub feature {
     my ($self, $ident) = @_;
@@ -4856,18 +4593,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return CPAN::Meta::Feature->new($ident, $f);
   }
   
-  # =method as_struct
-  #
-  #   my $copy = $meta->as_struct( \%options );
-  #
-  # This method returns a deep copy of the object's metadata as an unblessed hash
-  # reference.  It takes an optional hashref of options.  If the hashref contains
-  # a C<version> argument, the copied metadata will be converted to the version
-  # of the specification and returned.  For example:
-  #
-  #   my $old_spec = $meta->as_struct( {version => "1.4"} );
-  #
-  # =cut
   
   sub as_struct {
     my ($self, $options) = @_;
@@ -4879,24 +4604,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
     return $struct;
   }
   
-  # =method as_string
-  #
-  #   my $string = $meta->as_string( \%options );
-  #
-  # This method returns a serialized copy of the object's metadata as a character
-  # string.  (The strings are B<not> UTF-8 encoded.)  It takes an optional hashref
-  # of options.  If the hashref contains a C<version> argument, the copied metadata
-  # will be converted to the version of the specification and returned.  For
-  # example:
-  #
-  #   my $string = $meta->as_string( {version => "1.4"} );
-  #
-  # For C<version> greater than or equal to 2, the string will be serialized as
-  # JSON.  For C<version> less than 2, the string will be serialized as YAML.  In
-  # both cases, the same rules are followed as in the C<save()> method for choosing
-  # a serialization backend.
-  #
-  # =cut
   
   sub as_string {
     my ($self, $options) = @_;
@@ -4941,7 +4648,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -4949,7 +4656,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -5055,14 +4762,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   This method returns a new CPAN::Meta object using the structure represented by
   the given JSON string.  In other respects it is identical to C<load_file()>.
   
-  =head2 load_string
-  
-    my $meta = CPAN::Meta->load_string($string, \%options);
-  
-  If you don't know if a string contains YAML or JSON, this method will use
-  L<Parse::CPAN::Meta> to guess.  In other respects it is identical to
-  C<load_file()>.
-  
   =head2 save
   
     $meta->save($distmeta_file, \%options);
@@ -5155,7 +4854,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   will be converted to the version of the specification and returned.  For
   example:
   
-    my $string = $meta->as_string( {version => "1.4"} );
+    my $string = $meta->as_struct( {version => "1.4"} );
   
   For C<version> greater than or equal to 2, the string will be serialized as
   JSON.  For C<version> less than 2, the string will be serialized as YAML.  In
@@ -5344,10 +5043,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =item *
   
-  Chuck Adams <cja987@gmail.com>
-  
-  =item *
-  
   Cory G Watson <gphat@cpan.org>
   
   =item *
@@ -5396,7 +5091,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =item *
   
-  Olivier Mengue <dolmen@cpan.org>
+  Olivier Mengué <dolmen@cpan.org>
   
   =item *
   
@@ -5417,7 +5112,7 @@ CPAN_META
 $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_CHECK';
   package CPAN::Meta::Check;
   {
-    $CPAN::Meta::Check::VERSION = '0.008';
+    $CPAN::Meta::Check::VERSION = '0.007';
   }
   use strict;
   use warnings;
@@ -5456,7 +5151,16 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   sub requirements_for {
   	my ($meta, $phases, $type) = @_;
   	my $prereqs = ref($meta) eq 'CPAN::Meta' ? $meta->effective_prereqs : $meta;
-  	return $prereqs->merged_requirements(ref($phases) ? $phases : [ $phases ], [ $type ]);
+  	if (!ref $phases) {
+  		return $prereqs->requirements_for($phases, $type);
+  	}
+  	else {
+  		my $ret = CPAN::Meta::Requirements->new;
+  		for my $phase (@{ $phases }) {
+  			$ret->add_requirements($prereqs->requirements_for($phase, $type));
+  		}
+  		return $ret;
+  	}
   }
   
   sub check_requirements {
@@ -5498,7 +5202,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   =head1 VERSION
   
-  version 0.008
+  version 0.007
   
   =head1 SYNOPSIS
   
@@ -5510,19 +5214,17 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   =head1 FUNCTIONS
   
-  =head2 check_requirements($reqs, $type, $incdirs)
+  =head2 check_requirements($reqs, $type)
   
-  This function checks if all dependencies in C<$reqs> (a L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object) are met, taking into account that 'conflicts' dependencies have to be checked in reverse. It returns a hash with the modules as keys and any problems as values; the value for a successfully found module will be undef. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
+  This function checks if all dependencies in C<$reqs> (a L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object) are met, taking into account that 'conflicts' dependencies have to be checked in reverse. It returns a hash with the modules as keys and any problems as values; the value for a successfully found module will be undef.
   
   =head2 verify_dependencies($meta, $phases, $types, $incdirs)
   
-  Check all requirements in C<$meta> for phases C<$phases> and types C<$types>. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>. C<$meta> should be a L<CPAN::Meta::Prereqs> or L<CPAN::Meta> object.
+  Check all requirements in C<$meta> for phases C<$phases> and types C<$types>. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
   
-  =head2 requirements_for($meta, $phases, $types)
+  =head2 requirements_for($meta, $phases, $types, incdirs)
   
-  B<< This function is deprecated and may be removed at some point in the future, please use CPAN::Meta::Prereqs->merged_requirements instead. >>
-  
-  This function returns a unified L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object for all C<$type> requirements for C<$phases>. C<$phases> may be either one (scalar) value or an arrayref of valid values as defined by the L<CPAN::Meta spec|CPAN::Meta::Spec>. C<$type> must be a relationship as defined by the same spec. C<$meta> should be a L<CPAN::Meta::Prereqs> or L<CPAN::Meta> object.
+  This function returns a unified L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object for all C<$type> requirements for C<$phases>. $phases may be either one (scalar) value or an arrayref of valid values as defined by the L<CPAN::Meta spec|CPAN::Meta::Spec>. C<$type> must be a relationship as defined by the same spec. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
   
   =head1 SEE ALSO
   
@@ -5553,31 +5255,13 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   use strict;
   use warnings;
   package CPAN::Meta::Converter;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
-  # =head1 SYNOPSIS
-  #
-  #   my $struct = decode_json_file('META.json');
-  #
-  #   my $cmc = CPAN::Meta::Converter->new( $struct );
-  #
-  #   my $new_struct = $cmc->convert( version => "2" );
-  #
-  # =head1 DESCRIPTION
-  #
-  # This module converts CPAN Meta structures from one form to another.  The
-  # primary use is to convert older structures to the most modern version of
-  # the specification, but other transformations may be implemented in the
-  # future as needed.  (E.g. stripping all custom fields or stripping all
-  # optional fields.)
-  #
-  # =cut
   
   use CPAN::Meta::Validator;
   use CPAN::Meta::Requirements;
   use version 0.88 ();
   use Parse::CPAN::Meta 1.4400 ();
-  use List::Util 1.33 qw/all/;
   
   sub _dclone {
     my $ref = shift;
@@ -5629,7 +5313,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     my $sig = __PACKAGE__ . " version " . (__PACKAGE__->VERSION || "<dev>");
   
     return $sig unless defined $gen and length $gen;
-    return $gen if $gen =~ /\Q$sig/;
+    return $gen if $gen =~ /(, )\Q$sig/;
     return "$gen, $sig";
   }
   
@@ -5657,13 +5341,12 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   sub _change_meta_spec {
     my ($element, undef, undef, $version) = @_;
-    return {
-      version => $version,
-      url => $known_specs{$version},
-    };
+    $element->{version} = $version;
+    $element->{url} = $known_specs{$version};
+    return $element;
   }
   
-  my @open_source = (
+  my @valid_licenses_1 = (
     'perl',
     'gpl',
     'apache',
@@ -5675,12 +5358,6 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     'mit',
     'mozilla',
     'open_source',
-  );
-  
-  my %is_open_source = map {; $_ => 1 } @open_source;
-  
-  my @valid_licenses_1 = (
-    @open_source,
     'unrestricted',
     'restrictive',
     'unknown',
@@ -5697,9 +5374,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     if ( $license_map_1{lc $element} ) {
       return $license_map_1{lc $element};
     }
-    else {
-      return 'unknown';
-    }
+    return 'unknown';
   }
   
   my @valid_licenses_2 = qw(
@@ -5797,20 +5472,12 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
       return "unknown";
     }
     elsif( ref $element eq 'ARRAY' ) {
-      if ( @$element > 1) {
-        if ( all { $is_open_source{ $license_downgrade_map{lc $_} || 'unknown' } } @$element ) {
-          return 'open_source';
-        }
-        else {
-          return 'unknown';
-        }
-      }
-      elsif ( @$element == 1 ) {
-        return $license_downgrade_map{lc $element->[0]} || "unknown";
+      if ( @$element == 1 ) {
+        return $license_downgrade_map{$element->[0]} || "unknown";
       }
     }
     elsif ( ! ref $element ) {
-      return $license_downgrade_map{lc $element} || "unknown";
+      return $license_downgrade_map{$element} || "unknown";
     }
     return "unknown";
   }
@@ -5934,7 +5601,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
       # XXX turn this into CPAN::Meta::Requirements with bad version hook
       # and then turn it back into a hash
       my $new_map = CPAN::Meta::Requirements->new(
-        { bad_version_hook => \&_bad_version_hook } # punt
+        { bad_version_hook => sub { version->new(0) } } # punt
       );
       while ( my ($k,$v) = each %$element ) {
         next unless _is_module_name($k);
@@ -6785,15 +6452,6 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   # Code
   #--------------------------------------------------------------------------#
   
-  # =method new
-  #
-  #   my $cmc = CPAN::Meta::Converter->new( $struct );
-  #
-  # The constructor should be passed a valid metadata structure but invalid
-  # structures are accepted.  If no meta-spec version is provided, version 1.0 will
-  # be assumed.
-  #
-  # =cut
   
   sub new {
     my ($class,$data) = @_;
@@ -6801,80 +6459,13 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     # create an attributes hash
     my $self = {
       'data'    => $data,
-      'spec'    => _extract_spec_version($data),
+      'spec'    => $data->{'meta-spec'}{'version'} || "1.0",
     };
   
     # create the object
     return bless $self, $class;
   }
   
-  sub _extract_spec_version {
-      my ($data) = @_;
-      my $spec = $data->{'meta-spec'};
-  
-      # is meta-spec there and valid?
-      return "1.0" unless defined $spec && ref $spec eq 'HASH'; # before meta-spec?
-  
-      # does the version key look like a valid version?
-      my $v = $spec->{version};
-      if ( defined $v && $v =~ /^\d+(?:\.\d+)?$/ ) {
-          return $v if defined $v && grep { $v eq $_ } keys %known_specs; # known spec
-          return $v+0 if defined $v && grep { $v == $_ } keys %known_specs; # 2.0 => 2
-      }
-  
-      # otherwise, use heuristics: look for 1.x vs 2.0 fields
-      return "2" if exists $data->{prereqs};
-      return "1.4" if exists $data->{configure_requires};
-      return "1.2"; # when meta-spec was first defined
-  }
-  
-  # =method convert
-  #
-  #   my $new_struct = $cmc->convert( version => "2" );
-  #
-  # Returns a new hash reference with the metadata converted to a different form.
-  # C<convert> will die if any conversion/standardization still results in an
-  # invalid structure.
-  #
-  # Valid parameters include:
-  #
-  # =over
-  #
-  # =item *
-  #
-  # C<version> -- Indicates the desired specification version (e.g. "1.0", "1.1" ... "1.4", "2").
-  # Defaults to the latest version of the CPAN Meta Spec.
-  #
-  # =back
-  #
-  # Conversion proceeds through each version in turn.  For example, a version 1.2
-  # structure might be converted to 1.3 then 1.4 then finally to version 2. The
-  # conversion process attempts to clean-up simple errors and standardize data.
-  # For example, if C<author> is given as a scalar, it will converted to an array
-  # reference containing the item. (Converting a structure to its own version will
-  # also clean-up and standardize.)
-  #
-  # When data are cleaned and standardized, missing or invalid fields will be
-  # replaced with sensible defaults when possible.  This may be lossy or imprecise.
-  # For example, some badly structured META.yml files on CPAN have prerequisite
-  # modules listed as both keys and values:
-  #
-  #   requires => { 'Foo::Bar' => 'Bam::Baz' }
-  #
-  # These would be split and each converted to a prerequisite with a minimum
-  # version of zero.
-  #
-  # When some mandatory fields are missing or invalid, the conversion will attempt
-  # to provide a sensible default or will fill them with a value of 'unknown'.  For
-  # example a missing or unrecognized C<license> field will result in a C<license>
-  # field of 'unknown'.  Fields that may get an 'unknown' include:
-  #
-  # =for :list
-  # * abstract
-  # * author
-  # * license
-  #
-  # =cut
   
   sub convert {
     my ($self, %args) = @_;
@@ -6934,7 +6525,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -6942,7 +6533,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -7065,28 +6656,10 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use strict;
   use warnings;
   package CPAN::Meta::Feature;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   use CPAN::Meta::Prereqs;
   
-  # =head1 DESCRIPTION
-  #
-  # A CPAN::Meta::Feature object describes an optional feature offered by a CPAN
-  # distribution and specified in the distribution's F<META.json> (or F<META.yml>)
-  # file.
-  #
-  # For the most part, this class will only be used when operating on the result of
-  # the C<feature> or C<features> methods on a L<CPAN::Meta> object.
-  #
-  # =method new
-  #
-  #   my $feature = CPAN::Meta::Feature->new( $identifier => \%spec );
-  #
-  # This returns a new Feature object.  The C<%spec> argument to the constructor
-  # should be the same as the value of the C<optional_feature> entry in the
-  # distmeta.  It must contain entries for C<description> and C<prereqs>.
-  #
-  # =cut
   
   sub new {
     my ($class, $identifier, $spec) = @_;
@@ -7100,28 +6673,12 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
     bless \%guts => $class;
   }
   
-  # =method identifier
-  #
-  # This method returns the feature's identifier.
-  #
-  # =cut
   
   sub identifier  { $_[0]{identifier}  }
   
-  # =method description
-  #
-  # This method returns the feature's long description.
-  #
-  # =cut
   
   sub description { $_[0]{description} }
   
-  # =method prereqs
-  #
-  # This method returns the feature's prerequisites as a L<CPAN::Meta::Prereqs>
-  # object.
-  #
-  # =cut
   
   sub prereqs     { $_[0]{prereqs} }
   
@@ -7133,7 +6690,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -7141,7 +6698,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 DESCRIPTION
   
@@ -7214,7 +6771,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use strict;
   use warnings;
   package CPAN::Meta::History;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   1;
   
@@ -7224,7 +6781,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -7232,7 +6789,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 DESCRIPTION
   
@@ -7531,47 +7088,13 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use strict;
   use warnings;
   package CPAN::Meta::Prereqs;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
-  # =head1 DESCRIPTION
-  #
-  # A CPAN::Meta::Prereqs object represents the prerequisites for a CPAN
-  # distribution or one of its optional features.  Each set of prereqs is
-  # organized by phase and type, as described in L<CPAN::Meta::Prereqs>.
-  #
-  # =cut
   
   use Carp qw(confess);
   use Scalar::Util qw(blessed);
   use CPAN::Meta::Requirements 2.121;
   
-  # =method new
-  #
-  #   my $prereq = CPAN::Meta::Prereqs->new( \%prereq_spec );
-  #
-  # This method returns a new set of Prereqs.  The input should look like the
-  # contents of the C<prereqs> field described in L<CPAN::Meta::Spec>, meaning
-  # something more or less like this:
-  #
-  #   my $prereq = CPAN::Meta::Prereqs->new({
-  #     runtime => {
-  #       requires => {
-  #         'Some::Module' => '1.234',
-  #         ...,
-  #       },
-  #       ...,
-  #     },
-  #     ...,
-  #   });
-  #
-  # You can also construct an empty set of prereqs with:
-  #
-  #   my $prereqs = CPAN::Meta::Prereqs->new;
-  #
-  # This empty set of prereqs is useful for accumulating new prereqs before finally
-  # dumping the whole set into a structure or string.
-  #
-  # =cut
   
   sub __legal_phases { qw(configure build test runtime develop)   }
   sub __legal_types  { qw(requires recommends suggests conflicts) }
@@ -7607,19 +7130,6 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
     return bless \%guts => $class;
   }
   
-  # =method requirements_for
-  #
-  #   my $requirements = $prereqs->requirements_for( $phase, $type );
-  #
-  # This method returns a L<CPAN::Meta::Requirements> object for the given
-  # phase/type combination.  If no prerequisites are registered for that
-  # combination, a new CPAN::Meta::Requirements object will be returned, and it may
-  # be added to as needed.
-  #
-  # If C<$phase> or C<$type> are undefined or otherwise invalid, an exception will
-  # be raised.
-  #
-  # =cut
   
   sub requirements_for {
     my ($self, $phase, $type) = @_;
@@ -7642,21 +7152,6 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
     return $req;
   }
   
-  # =method with_merged_prereqs
-  #
-  #   my $new_prereqs = $prereqs->with_merged_prereqs( $other_prereqs );
-  #
-  #   my $new_prereqs = $prereqs->with_merged_prereqs( \@other_prereqs );
-  #
-  # This method returns a new CPAN::Meta::Prereqs objects in which all the
-  # other prerequisites given are merged into the current set.  This is primarily
-  # provided for combining a distribution's core prereqs with the prereqs of one of
-  # its optional features.
-  #
-  # The new prereqs object has no ties to the originals, and altering it further
-  # will not alter them.
-  #
-  # =cut
   
   sub with_merged_prereqs {
     my ($self, $other) = @_;
@@ -7687,56 +7182,6 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
     return (ref $self)->new(\%new_arg);
   }
   
-  # =method merged_requirements
-  #
-  #     my $new_reqs = $prereqs->merged_requirements( \@phases, \@types );
-  #     my $new_reqs = $prereqs->merged_requirements( \@phases );
-  #     my $new_reqs = $preerqs->merged_requirements();
-  #
-  # This method joins together all requirements across a number of phases
-  # and types into a new L<CPAN::Meta::Requirements> object.  If arguments
-  # are omitted, it defaults to "runtime", "build" and "test" for phases
-  # and "requires" and "recommends" for types.
-  #
-  # =cut
-  
-  sub merged_requirements {
-    my ($self, $phases, $types) = @_;
-    $phases = [qw/runtime build test/] unless defined $phases;
-    $types = [qw/requires recommends/] unless defined $types;
-  
-    confess "merged_requirements phases argument must be an arrayref"
-      unless ref $phases eq 'ARRAY';
-    confess "merged_requirements types argument must be an arrayref"
-      unless ref $types eq 'ARRAY';
-  
-    my $req = CPAN::Meta::Requirements->new;
-  
-    for my $phase ( @$phases ) {
-      unless ($phase =~ /\Ax_/i or grep { $phase eq $_ } $self->__legal_phases) {
-          confess "requested requirements for unknown phase: $phase";
-      }
-      for my $type ( @$types ) {
-        unless ($type =~ /\Ax_/i or grep { $type eq $_ } $self->__legal_types) {
-            confess "requested requirements for unknown type: $type";
-        }
-        $req->add_requirements( $self->requirements_for($phase, $type) );
-      }
-    }
-  
-    $req->finalize if $self->is_finalized;
-  
-    return $req;
-  }
-  
-  
-  # =method as_string_hash
-  #
-  # This method returns a hashref containing structures suitable for dumping into a
-  # distmeta data structure.  It is made up of hashes and strings, only; there will
-  # be no Prereqs, CPAN::Meta::Requirements, or C<version> objects inside it.
-  #
-  # =cut
   
   sub as_string_hash {
     my ($self) = @_;
@@ -7755,22 +7200,9 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
     return \%hash;
   }
   
-  # =method is_finalized
-  #
-  # This method returns true if the set of prereqs has been marked "finalized," and
-  # cannot be altered.
-  #
-  # =cut
   
   sub is_finalized { $_[0]{finalized} }
   
-  # =method finalize
-  #
-  # Calling C<finalize> on a Prereqs object will close it for further modification.
-  # Attempting to make any changes that would actually alter the prereqs will
-  # result in an exception being thrown.
-  #
-  # =cut
   
   sub finalize {
     my ($self) = @_;
@@ -7782,16 +7214,6 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
     }
   }
   
-  # =method clone
-  #
-  #   my $cloned_prereqs = $prereqs->clone;
-  #
-  # This method returns a Prereqs object that is identical to the original object,
-  # but can be altered without affecting the original object.  Finalization does
-  # not survive cloning, meaning that you may clone a finalized set of prereqs and
-  # then modify the clone.
-  #
-  # =cut
   
   sub clone {
     my ($self) = @_;
@@ -7807,7 +7229,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -7815,7 +7237,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 DESCRIPTION
   
@@ -7876,17 +7298,6 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   The new prereqs object has no ties to the originals, and altering it further
   will not alter them.
-  
-  =head2 merged_requirements
-  
-      my $new_reqs = $prereqs->merged_requirements( \@phases, \@types );
-      my $new_reqs = $prereqs->merged_requirements( \@phases );
-      my $new_reqs = $preerqs->merged_requirements();
-  
-  This method joins together all requirements across a number of phases
-  and types into a new L<CPAN::Meta::Requirements> object.  If arguments
-  are omitted, it defaults to "runtime", "build" and "test" for phases
-  and "requires" and "recommends" for types.
   
   =head2 as_string_hash
   
@@ -7951,7 +7362,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   use strict;
   use warnings;
   package CPAN::Meta::Requirements;
-  our $VERSION = '2.125'; # VERSION
+  our $VERSION = '2.123'; # VERSION
   # ABSTRACT: a set of version requirements for a CPAN dist
   
   
@@ -8394,7 +7805,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
   =head1 VERSION
   
-  version 2.125
+  version 2.123
   
   =head1 SYNOPSIS
   
@@ -8644,7 +8055,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<https://github.com/dagolden/CPAN-Meta-Requirements/issues>.
+  at L<https://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta-Requirements>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -8652,9 +8063,9 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<https://github.com/dagolden/CPAN-Meta-Requirements>
+  L<https://github.com/dagolden/cpan-meta-requirements>
   
-    git clone https://github.com/dagolden/CPAN-Meta-Requirements.git
+    git clone git://github.com/dagolden/cpan-meta-requirements.git
   
   =head1 AUTHORS
   
@@ -8690,7 +8101,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   use strict;
   use warnings;
   package CPAN::Meta::Spec;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
   1;
   
@@ -8703,7 +8114,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -8711,7 +8122,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -8765,7 +8176,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
       keywords => [ qw/ toolchain cpan dual-life / ],
       'meta-spec' => {
         version => '2',
-        url     => 'https://metacpan.org/pod/CPAN::Meta::Spec',
+        url     => 'http://search.cpan.org/perldoc?CPAN::Meta::Spec',
       },
       generated_by => 'Module::Build version 0.36',
     };
@@ -8998,7 +8409,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
     license => [ 'perl_5' ]
   
-    license => [ 'apache_2_0', 'mozilla_1_0' ]
+    license => [ 'apache_2', 'mozilla_1_0' ]
   
   (Spec 2) [required] {List of one or more License Strings}
   
@@ -9078,20 +8489,6 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   the given version.  This is strictly for human-consumption and should
   not impact the interpretation of the document.
   
-  For the version 2 spec, either of these are recommended:
-  
-  =over 4
-  
-  =item *
-  
-  C<https://metacpan.org/pod/CPAN::Meta::Spec>
-  
-  =item *
-  
-  C<http://search.cpan.org/perldoc?CPAN::Meta::Spec>
-  
-  =back
-  
   =back
   
   =head3 name
@@ -9105,8 +8502,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   This field is the name of the distribution.  This is often created by
   taking the "main package" in the distribution and changing C<::> to
   C<->, but the name may be completely unrelated to the packages within
-  the distribution.  For example, L<LWP::UserAgent> is distributed as part
-  of the distribution name "libwww-perl".
+  the distribution.  C.f. L<http://search.cpan.org/dist/libwww-perl/>.
   
   =head3 release_status
   
@@ -9360,8 +8756,8 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   This describes all packages provided by this distribution.  This
   information is used by distribution and automation mechanisms like
-  PAUSE, CPAN, metacpan.org and search.cpan.org to build indexes saying in
-  which distribution various packages can be found.
+  PAUSE, CPAN, and search.cpan.org to build indexes saying in which
+  distribution various packages can be found.
   
   The keys of C<provides> are package names that can be found within
   the distribution.  If a package name key is provided, it must
@@ -9788,41 +9184,21 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   =head1 SEE ALSO
   
-  =over 4
-  
-  =item *
-  
   CPAN, L<http://www.cpan.org/>
   
-  =item *
+  CPAN.pm, L<http://search.cpan.org/dist/CPAN/>
+  
+  CPANPLUS, L<http://search.cpan.org/dist/CPANPLUS/>
+  
+  ExtUtils::MakeMaker, L<http://search.cpan.org/dist/ExtUtils-MakeMaker/>
+  
+  Module::Build, L<http://search.cpan.org/dist/Module-Build/>
+  
+  Module::Install, L<http://search.cpan.org/dist/Module-Install/>
   
   JSON, L<http://json.org/>
   
-  =item *
-  
   YAML, L<http://www.yaml.org/>
-  
-  =item *
-  
-  L<CPAN>
-  
-  =item *
-  
-  L<CPANPLUS>
-  
-  =item *
-  
-  L<ExtUtils::MakeMaker>
-  
-  =item *
-  
-  L<Module::Build>
-  
-  =item *
-  
-  L<Module::Install>
-  
-  =back
   
   =head1 HISTORY
   
@@ -9866,26 +9242,8 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   use strict;
   use warnings;
   package CPAN::Meta::Validator;
-  our $VERSION = '2.140640'; # VERSION
+  our $VERSION = '2.132510'; # VERSION
   
-  # =head1 SYNOPSIS
-  #
-  #   my $struct = decode_json_file('META.json');
-  #
-  #   my $cmv = CPAN::Meta::Validator->new( $struct );
-  #
-  #   unless ( $cmv->is_valid ) {
-  #     my $msg = "Invalid META structure.  Errors found:\n";
-  #     $msg .= join( "\n", $cmv->errors );
-  #     die $msg;
-  #   }
-  #
-  # =head1 DESCRIPTION
-  #
-  # This module validates a CPAN Meta structure against the version of the
-  # the specification claimed in the C<meta-spec> field of the structure.
-  #
-  # =cut
   
   #--------------------------------------------------------------------------#
   # This code copied and adapted from Test::CPAN::Meta
@@ -9960,10 +9318,10 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     '2' => {
       # REQUIRED
       'abstract'            => { mandatory => 1, value => \&string  },
-      'author'              => { mandatory => 1, list => { value => \&string } },
+      'author'              => { mandatory => 1, lazylist => { value => \&string } },
       'dynamic_config'      => { mandatory => 1, value => \&boolean },
       'generated_by'        => { mandatory => 1, value => \&string  },
-      'license'             => { mandatory => 1, list => { value => \&license } },
+      'license'             => { mandatory => 1, lazylist => { value => \&license } },
       'meta-spec' => {
         mandatory => 1,
         'map' => {
@@ -9978,7 +9336,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
       # OPTIONAL
       'description' => { value => \&string },
-      'keywords'    => { list => { value => \&string } },
+      'keywords'    => { lazylist => { value => \&string } },
       'no_index'    => $no_index_2,
       'optional_features'   => {
         'map'       => {
@@ -10007,7 +9365,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
       },
       'resources'   => {
         'map'       => {
-          license    => { list => { value => \&url } },
+          license    => { lazylist => { value => \&url } },
           homepage   => { value => \&url },
           bugtracker => {
             'map' => {
@@ -10301,13 +9659,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   # Code
   #--------------------------------------------------------------------------#
   
-  # =method new
-  #
-  #   my $cmv = CPAN::Meta::Validator->new( $struct )
-  #
-  # The constructor must be passed a metadata structure.
-  #
-  # =cut
   
   sub new {
     my ($class,$data) = @_;
@@ -10315,7 +9666,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     # create an attributes hash
     my $self = {
       'data'    => $data,
-      'spec'    => eval { $data->{'meta-spec'}{'version'} } || "1.0",
+      'spec'    => $data->{'meta-spec'}{'version'} || "1.0",
       'errors'  => undef,
     };
   
@@ -10323,16 +9674,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     return bless $self, $class;
   }
   
-  # =method is_valid
-  #
-  #   if ( $cmv->is_valid ) {
-  #     ...
-  #   }
-  #
-  # Returns a boolean value indicating whether the metadata provided
-  # is valid.
-  #
-  # =cut
   
   sub is_valid {
       my $self = shift;
@@ -10342,13 +9683,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
       return ! $self->errors;
   }
   
-  # =method errors
-  #
-  #   warn( join "\n", $cmv->errors );
-  #
-  # Returns a list of errors seen during validation.
-  #
-  # =cut
   
   sub errors {
       my $self = shift;
@@ -10356,34 +9690,9 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
       return @{$self->{errors}};
   }
   
-  # =begin :internals
-  #
-  # =head2 Check Methods
-  #
-  # =over
-  #
-  # =item *
-  #
-  # check_map($spec,$data)
-  #
-  # Checks whether a map (or hash) part of the data structure conforms to the
-  # appropriate specification definition.
-  #
-  # =item *
-  #
-  # check_list($spec,$data)
-  #
-  # Checks whether a list (or array) part of the data structure conforms to
-  # the appropriate specification definition.
-  #
-  # =item *
-  #
-  # =back
-  #
-  # =cut
   
   my $spec_error = "Missing validation action in specification. "
-    . "Must be one of 'map', 'list', or 'value'";
+    . "Must be one of 'map', 'list', 'lazylist', or 'value'";
   
   sub check_map {
       my ($self,$spec,$data) = @_;
@@ -10415,6 +9724,8 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
                   $self->check_map($spec->{$key}{'map'},$data->{$key});
               } elsif($spec->{$key}{'list'}) {
                   $self->check_list($spec->{$key}{'list'},$data->{$key});
+              } elsif($spec->{$key}{'lazylist'}) {
+                  $self->check_lazylist($spec->{$key}{'lazylist'},$data->{$key});
               } else {
                   $self->_error( "$spec_error for '$key'" );
               }
@@ -10427,6 +9738,8 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
                   $self->check_map($spec->{':key'}{'map'},$data->{$key});
               } elsif($spec->{':key'}{'list'}) {
                   $self->check_list($spec->{':key'}{'list'},$data->{$key});
+              } elsif($spec->{':key'}{'lazylist'}) {
+                  $self->check_lazylist($spec->{':key'}{'lazylist'},$data->{$key});
               } else {
                   $self->_error( "$spec_error for ':key'" );
               }
@@ -10437,6 +9750,17 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
           }
           pop @{$self->{stack}};
       }
+  }
+  
+  # if it's a string, make it into a list and check the list
+  sub check_lazylist {
+      my ($self,$spec,$data) = @_;
+  
+      if ( defined $data && ! ref($data) ) {
+        $data = [ $data ];
+      }
+  
+      $self->check_list($spec,$data);
   }
   
   sub check_list {
@@ -10461,6 +9785,8 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
               $self->check_map($spec->{'map'},$value);
           } elsif(defined $spec->{'list'}) {
               $self->check_list($spec->{'list'},$value);
+          } elsif(defined $spec->{'lazylist'}) {
+              $self->check_lazylist($spec->{'lazylist'},$value);
           } elsif ($spec->{':key'}) {
               $self->check_map($spec,$value);
           } else {
@@ -10470,113 +9796,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
       }
   }
   
-  # =head2 Validator Methods
-  #
-  # =over
-  #
-  # =item *
-  #
-  # header($self,$key,$value)
-  #
-  # Validates that the header is valid.
-  #
-  # Note: No longer used as we now read the data structure, not the file.
-  #
-  # =item *
-  #
-  # url($self,$key,$value)
-  #
-  # Validates that a given value is in an acceptable URL format
-  #
-  # =item *
-  #
-  # urlspec($self,$key,$value)
-  #
-  # Validates that the URL to a META specification is a known one.
-  #
-  # =item *
-  #
-  # string_or_undef($self,$key,$value)
-  #
-  # Validates that the value is either a string or an undef value. Bit of a
-  # catchall function for parts of the data structure that are completely user
-  # defined.
-  #
-  # =item *
-  #
-  # string($self,$key,$value)
-  #
-  # Validates that a string exists for the given key.
-  #
-  # =item *
-  #
-  # file($self,$key,$value)
-  #
-  # Validate that a file is passed for the given key. This may be made more
-  # thorough in the future. For now it acts like \&string.
-  #
-  # =item *
-  #
-  # exversion($self,$key,$value)
-  #
-  # Validates a list of versions, e.g. '<= 5, >=2, ==3, !=4, >1, <6, 0'.
-  #
-  # =item *
-  #
-  # version($self,$key,$value)
-  #
-  # Validates a single version string. Versions of the type '5.8.8' and '0.00_00'
-  # are both valid. A leading 'v' like 'v1.2.3' is also valid.
-  #
-  # =item *
-  #
-  # boolean($self,$key,$value)
-  #
-  # Validates for a boolean value. Currently these values are '1', '0', 'true',
-  # 'false', however the latter 2 may be removed.
-  #
-  # =item *
-  #
-  # license($self,$key,$value)
-  #
-  # Validates that a value is given for the license. Returns 1 if an known license
-  # type, or 2 if a value is given but the license type is not a recommended one.
-  #
-  # =item *
-  #
-  # custom_1($self,$key,$value)
-  #
-  # Validates that the given key is in CamelCase, to indicate a user defined
-  # keyword and only has characters in the class [-_a-zA-Z].  In version 1.X
-  # of the spec, this was only explicitly stated for 'resources'.
-  #
-  # =item *
-  #
-  # custom_2($self,$key,$value)
-  #
-  # Validates that the given key begins with 'x_' or 'X_', to indicate a user
-  # defined keyword and only has characters in the class [-_a-zA-Z]
-  #
-  # =item *
-  #
-  # identifier($self,$key,$value)
-  #
-  # Validates that key is in an acceptable format for the META specification,
-  # for an identifier, i.e. any that matches the regular expression
-  # qr/[a-z][a-z_]/i.
-  #
-  # =item *
-  #
-  # module($self,$key,$value)
-  #
-  # Validates that a given key is in an acceptable module name format, e.g.
-  # 'Test::CPAN::Meta::Version'.
-  #
-  # =back
-  #
-  # =end :internals
-  #
-  # =cut
   
   sub header {
       my ($self,$key,$value) = @_;
@@ -10853,7 +10072,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =pod
   
-  =encoding UTF-8
+  =encoding utf-8
   
   =head1 NAME
   
@@ -10861,7 +10080,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =head1 VERSION
   
-  version 2.140640
+  version 2.132510
   
   =head1 SYNOPSIS
   
@@ -10924,6 +10143,10 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   the appropriate specification definition.
   
   =item *
+  
+  check_lazylist($spec,$data)
+  
+  Checks whether a list conforms, but converts strings to a single-element list
   
   =back
   
@@ -11033,7 +10256,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =end :internals
   
-  =for Pod::Coverage anything boolean check_list custom_1 custom_2 exversion file
+  =for Pod::Coverage anything boolean check_lazylist check_list custom_1 custom_2 exversion file
   identifier license module phase relation release_status string string_or_undef
   url urlspec version header check_map
   
@@ -11071,882 +10294,649 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
 CPAN_META_VALIDATOR
 
 $fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_YAML';
-  use 5.008001; # sane UTF-8 support
-  use strict;
-  use warnings;
   package CPAN::Meta::YAML;
-  $CPAN::Meta::YAML::VERSION = '0.012';
+  {
+    $CPAN::Meta::YAML::VERSION = '0.008';
+  }
+  
+  use strict;
+  
+  # UTF Support?
+  sub HAVE_UTF8 () { $] >= 5.007003 }
   BEGIN {
-    $CPAN::Meta::YAML::AUTHORITY = 'cpan:ADAMK';
-  }
-  # git description: v1.60-1-g1c16a0a
-  ; # original $VERSION removed by Doppelgaenger
-  # XXX-INGY is 5.8.1 too old/broken for utf8?
-  # XXX-XDG Lancaster consensus was that it was sufficient until
-  # proven otherwise
+  	if ( HAVE_UTF8 ) {
+  		# The string eval helps hide this from Test::MinimumVersion
+  		eval "require utf8;";
+  		die "Failed to load UTF-8 support" if $@;
+  	}
   
+  	# Class structure
+  	require 5.004;
+  	require Exporter;
+  	require Carp;
+  	@CPAN::Meta::YAML::ISA       = qw{ Exporter  };
+  	@CPAN::Meta::YAML::EXPORT    = qw{ Load Dump };
+  	@CPAN::Meta::YAML::EXPORT_OK = qw{ LoadFile DumpFile freeze thaw };
   
-  #####################################################################
-  # The CPAN::Meta::YAML API.
-  #
-  # These are the currently documented API functions/methods and
-  # exports:
-  
-  use Exporter;
-  our @ISA       = qw{ Exporter  };
-  our @EXPORT    = qw{ Load Dump };
-  our @EXPORT_OK = qw{ LoadFile DumpFile freeze thaw };
-  
-  ###
-  # Functional/Export API:
-  
-  sub Dump {
-      return CPAN::Meta::YAML->new(@_)->_dump_string;
+  	# Error storage
+  	$CPAN::Meta::YAML::errstr    = '';
   }
   
-  # XXX-INGY Returning last document seems a bad behavior.
-  # XXX-XDG I think first would seem more natural, but I don't know
-  # that it's worth changing now
-  sub Load {
-      my $self = CPAN::Meta::YAML->_load_string(@_);
-      if ( wantarray ) {
-          return @$self;
-      } else {
-          # To match YAML.pm, return the last document
-          return $self->[-1];
-      }
-  }
-  
-  # XXX-INGY Do we really need freeze and thaw?
-  # XXX-XDG I don't think so.  I'd support deprecating them.
-  BEGIN {
-      *freeze = \&Dump;
-      *thaw   = \&Load;
-  }
-  
-  sub DumpFile {
-      my $file = shift;
-      return CPAN::Meta::YAML->new(@_)->_dump_file($file);
-  }
-  
-  sub LoadFile {
-      my $file = shift;
-      my $self = CPAN::Meta::YAML->_load_file($file);
-      if ( wantarray ) {
-          return @$self;
-      } else {
-          # Return only the last document to match YAML.pm,
-          return $self->[-1];
-      }
-  }
-  
-  
-  ###
-  # Object Oriented API:
-  
-  # Create an empty CPAN::Meta::YAML object
-  # XXX-INGY Why do we use ARRAY object?
-  # NOTE: I get it now, but I think it's confusing and not needed.
-  # Will change it on a branch later, for review.
-  #
-  # XXX-XDG I don't support changing it yet.  It's a very well-documented
-  # "API" of CPAN::Meta::YAML.  I'd support deprecating it, but Adam suggested
-  # we not change it until YAML.pm's own OO API is established so that
-  # users only have one API change to digest, not two
-  sub new {
-      my $class = shift;
-      bless [ @_ ], $class;
-  }
-  
-  # XXX-INGY It probably doesn't matter, and it's probably too late to
-  # change, but 'read/write' are the wrong names. Read and Write
-  # are actions that take data from storage to memory
-  # characters/strings. These take the data to/from storage to native
-  # Perl objects, which the terms dump and load are meant. As long as
-  # this is a legacy quirk to CPAN::Meta::YAML it's ok, but I'd prefer not
-  # to add new {read,write}_* methods to this API.
-  
-  sub read_string {
-      my $self = shift;
-      $self->_load_string(@_);
-  }
-  
-  sub write_string {
-      my $self = shift;
-      $self->_dump_string(@_);
-  }
-  
-  sub read {
-      my $self = shift;
-      $self->_load_file(@_);
-  }
-  
-  sub write {
-      my $self = shift;
-      $self->_dump_file(@_);
-  }
-  
-  
-  
-  
-  #####################################################################
-  # Constants
+  # The character class of all characters we need to escape
+  # NOTE: Inlined, since it's only used once
+  # my $RE_ESCAPE = '[\\x00-\\x08\\x0b-\\x0d\\x0e-\\x1f\"\n]';
   
   # Printed form of the unprintable characters in the lowest range
   # of ASCII characters, listed by ASCII ordinal position.
   my @UNPRINTABLE = qw(
-      0    x01  x02  x03  x04  x05  x06  a
-      b    t    n    v    f    r    x0E  x0F
-      x10  x11  x12  x13  x14  x15  x16  x17
-      x18  x19  x1A  e    x1C  x1D  x1E  x1F
+  	z    x01  x02  x03  x04  x05  x06  a
+  	x08  t    n    v    f    r    x0e  x0f
+  	x10  x11  x12  x13  x14  x15  x16  x17
+  	x18  x19  x1a  e    x1c  x1d  x1e  x1f
   );
   
   # Printable characters for escapes
   my %UNESCAPES = (
-      0 => "\x00", z => "\x00", N    => "\x85",
-      a => "\x07", b => "\x08", t    => "\x09",
-      n => "\x0a", v => "\x0b", f    => "\x0c",
-      r => "\x0d", e => "\x1b", '\\' => '\\',
+  	z => "\x00", a => "\x07", t    => "\x09",
+  	n => "\x0a", v => "\x0b", f    => "\x0c",
+  	r => "\x0d", e => "\x1b", '\\' => '\\',
   );
   
-  # XXX-INGY
-  # I(ngy) need to decide if these values should be quoted in
-  # CPAN::Meta::YAML or not. Probably yes.
-  
-  # These 3 values have special meaning when unquoted and using the
-  # default YAML schema. They need quotes if they are strings.
+  # Special magic boolean words
   my %QUOTE = map { $_ => 1 } qw{
-      null true false
+  	null Null NULL
+  	y Y yes Yes YES n N no No NO
+  	true True TRUE false False FALSE
+  	on On ON off Off OFF
   };
-  
-  # The commented out form is simpler, but overloaded the Perl regex
-  # engine due to recursion and backtracking problems on strings
-  # larger than 32,000ish characters. Keep it for reference purposes.
-  # qr/\"((?:\\.|[^\"])*)\"/
-  my $re_capture_double_quoted = qr/\"([^\\"]*(?:\\.[^\\"]*)*)\"/;
-  my $re_capture_single_quoted = qr/\'([^\']*(?:\'\'[^\']*)*)\'/;
-  # unquoted re gets trailing space that needs to be stripped
-  my $re_capture_unquoted_key  = qr/([^:]+(?::+\S[^:]*)*)(?=\s*\:(?:\s+|$))/;
-  my $re_trailing_comment      = qr/(?:\s+\#.*)?/;
-  my $re_key_value_separator   = qr/\s*:(?:\s+(?:\#.*)?|$)/;
   
   
   
   
   
   #####################################################################
-  # CPAN::Meta::YAML Implementation.
-  #
-  # These are the private methods that do all the work. They may change
-  # at any time.
+  # Implementation
   
-  
-  ###
-  # Loader functions:
+  # Create an empty CPAN::Meta::YAML object
+  sub new {
+  	my $class = shift;
+  	bless [ @_ ], $class;
+  }
   
   # Create an object from a file
-  sub _load_file {
-      my $class = ref $_[0] ? ref shift : shift;
+  sub read {
+  	my $class = ref $_[0] ? ref shift : shift;
   
-      # Check the file
-      my $file = shift or $class->_error( 'You did not specify a file name' );
-      $class->_error( "File '$file' does not exist" )
-          unless -e $file;
-      $class->_error( "'$file' is a directory, not a file" )
-          unless -f _;
-      $class->_error( "Insufficient permissions to read '$file'" )
-          unless -r _;
+  	# Check the file
+  	my $file = shift or return $class->_error( 'You did not specify a file name' );
+  	return $class->_error( "File '$file' does not exist" )              unless -e $file;
+  	return $class->_error( "'$file' is a directory, not a file" )       unless -f _;
+  	return $class->_error( "Insufficient permissions to read '$file'" ) unless -r _;
   
-      # Open unbuffered with strict UTF-8 decoding and no translation layers
-      open( my $fh, "<:unix:encoding(UTF-8)", $file );
-      unless ( $fh ) {
-          $class->_error("Failed to open file '$file': $!");
-      }
+  	# Slurp in the file
+  	local $/ = undef;
+  	local *CFG;
+  	unless ( open(CFG, $file) ) {
+  		return $class->_error("Failed to open file '$file': $!");
+  	}
+  	my $contents = <CFG>;
+  	unless ( close(CFG) ) {
+  		return $class->_error("Failed to close file '$file': $!");
+  	}
   
-      # flock if available (or warn if not possible for OS-specific reasons)
-      if ( _can_flock() ) {
-          flock( $fh, Fcntl::LOCK_SH() )
-              or warn "Couldn't lock '$file' for reading: $!";
-      }
-  
-      # slurp the contents
-      my $contents = eval {
-          use warnings FATAL => 'utf8';
-          local $/;
-          <$fh>
-      };
-      if ( my $err = $@ ) {
-          $class->_error("Error reading from file '$file': $err");
-      }
-  
-      # close the file (release the lock)
-      unless ( close $fh ) {
-          $class->_error("Failed to close file '$file': $!");
-      }
-  
-      $class->_load_string( $contents );
+  	$class->read_string( $contents );
   }
   
   # Create an object from a string
-  sub _load_string {
-      my $class  = ref $_[0] ? ref shift : shift;
-      my $self   = bless [], $class;
-      my $string = $_[0];
-      eval {
-          unless ( defined $string ) {
-              die \"Did not provide a string to load";
-          }
+  sub read_string {
+  	my $class  = ref $_[0] ? ref shift : shift;
+  	my $self   = bless [], $class;
+  	my $string = $_[0];
+  	eval {
+  		unless ( defined $string ) {
+  			die \"Did not provide a string to load";
+  		}
   
-          # Check if Perl has it marked as characters, but it's internally
-          # inconsistent.  E.g. maybe latin1 got read on a :utf8 layer
-          if ( utf8::is_utf8($string) && ! utf8::valid($string) ) {
-              die \<<'...';
-  Read an invalid UTF-8 string (maybe mixed UTF-8 and 8-bit character set).
-  Did you decode with lax ":utf8" instead of strict ":encoding(UTF-8)"?
-  ...
-          }
+  		# Byte order marks
+  		# NOTE: Keeping this here to educate maintainers
+  		# my %BOM = (
+  		#     "\357\273\277" => 'UTF-8',
+  		#     "\376\377"     => 'UTF-16BE',
+  		#     "\377\376"     => 'UTF-16LE',
+  		#     "\377\376\0\0" => 'UTF-32LE'
+  		#     "\0\0\376\377" => 'UTF-32BE',
+  		# );
+  		if ( $string =~ /^(?:\376\377|\377\376|\377\376\0\0|\0\0\376\377)/ ) {
+  			die \"Stream has a non UTF-8 BOM";
+  		} else {
+  			# Strip UTF-8 bom if found, we'll just ignore it
+  			$string =~ s/^\357\273\277//;
+  		}
   
-          # Ensure Unicode character semantics, even for 0x80-0xff
-          utf8::upgrade($string);
+  		# Try to decode as utf8
+  		utf8::decode($string) if HAVE_UTF8;
   
-          # Check for and strip any leading UTF-8 BOM
-          $string =~ s/^\x{FEFF}//;
+  		# Check for some special cases
+  		return $self unless length $string;
+  		unless ( $string =~ /[\012\015]+\z/ ) {
+  			die \"Stream does not end with newline character";
+  		}
   
-          # Check for some special cases
-          return $self unless length $string;
+  		# Split the file into lines
+  		my @lines = grep { ! /^\s*(?:\#.*)?\z/ }
+  			    split /(?:\015{1,2}\012|\015|\012)/, $string;
   
-          # Split the file into lines
-          my @lines = grep { ! /^\s*(?:\#.*)?\z/ }
-                  split /(?:\015{1,2}\012|\015|\012)/, $string;
+  		# Strip the initial YAML header
+  		@lines and $lines[0] =~ /^\%YAML[: ][\d\.]+.*\z/ and shift @lines;
   
-          # Strip the initial YAML header
-          @lines and $lines[0] =~ /^\%YAML[: ][\d\.]+.*\z/ and shift @lines;
+  		# A nibbling parser
+  		while ( @lines ) {
+  			# Do we have a document header?
+  			if ( $lines[0] =~ /^---\s*(?:(.+)\s*)?\z/ ) {
+  				# Handle scalar documents
+  				shift @lines;
+  				if ( defined $1 and $1 !~ /^(?:\#.+|\%YAML[: ][\d\.]+)\z/ ) {
+  					push @$self, $self->_read_scalar( "$1", [ undef ], \@lines );
+  					next;
+  				}
+  			}
   
-          # A nibbling parser
-          my $in_document = 0;
-          while ( @lines ) {
-              # Do we have a document header?
-              if ( $lines[0] =~ /^---\s*(?:(.+)\s*)?\z/ ) {
-                  # Handle scalar documents
-                  shift @lines;
-                  if ( defined $1 and $1 !~ /^(?:\#.+|\%YAML[: ][\d\.]+)\z/ ) {
-                      push @$self,
-                          $self->_load_scalar( "$1", [ undef ], \@lines );
-                      next;
-                  }
-                  $in_document = 1;
-              }
+  			if ( ! @lines or $lines[0] =~ /^(?:---|\.\.\.)/ ) {
+  				# A naked document
+  				push @$self, undef;
+  				while ( @lines and $lines[0] !~ /^---/ ) {
+  					shift @lines;
+  				}
   
-              if ( ! @lines or $lines[0] =~ /^(?:---|\.\.\.)/ ) {
-                  # A naked document
-                  push @$self, undef;
-                  while ( @lines and $lines[0] !~ /^---/ ) {
-                      shift @lines;
-                  }
-                  $in_document = 0;
+  			} elsif ( $lines[0] =~ /^\s*\-/ ) {
+  				# An array at the root
+  				my $document = [ ];
+  				push @$self, $document;
+  				$self->_read_array( $document, [ 0 ], \@lines );
   
-              # XXX The final '-+$' is to look for -- which ends up being an
-              # error later.
-              } elsif ( ! $in_document && @$self ) {
-                  # only the first document can be explicit
-                  die \"CPAN::Meta::YAML failed to classify the line '$lines[0]'";
-              } elsif ( $lines[0] =~ /^\s*\-(?:\s|$|-+$)/ ) {
-                  # An array at the root
-                  my $document = [ ];
-                  push @$self, $document;
-                  $self->_load_array( $document, [ 0 ], \@lines );
+  			} elsif ( $lines[0] =~ /^(\s*)\S/ ) {
+  				# A hash at the root
+  				my $document = { };
+  				push @$self, $document;
+  				$self->_read_hash( $document, [ length($1) ], \@lines );
   
-              } elsif ( $lines[0] =~ /^(\s*)\S/ ) {
-                  # A hash at the root
-                  my $document = { };
-                  push @$self, $document;
-                  $self->_load_hash( $document, [ length($1) ], \@lines );
+  			} else {
+  				die \"CPAN::Meta::YAML failed to classify the line '$lines[0]'";
+  			}
+  		}
+  	};
+  	if ( ref $@ eq 'SCALAR' ) {
+  		return $self->_error(${$@});
+  	} elsif ( $@ ) {
+  		require Carp;
+  		Carp::croak($@);
+  	}
   
-              } else {
-                  # Shouldn't get here.  @lines have whitespace-only lines
-                  # stripped, and previous match is a line with any
-                  # non-whitespace.  So this clause should only be reachable via
-                  # a perlbug where \s is not symmetric with \S
-  
-                  # uncoverable statement
-                  die \"CPAN::Meta::YAML failed to classify the line '$lines[0]'";
-              }
-          }
-      };
-      if ( ref $@ eq 'SCALAR' ) {
-          $self->_error(${$@});
-      } elsif ( $@ ) {
-          $self->_error($@);
-      }
-  
-      return $self;
+  	return $self;
   }
   
-  sub _unquote_single {
-      my ($self, $string) = @_;
-      return '' unless length $string;
-      $string =~ s/\'\'/\'/g;
-      return $string;
+  # Deparse a scalar string to the actual scalar
+  sub _read_scalar {
+  	my ($self, $string, $indent, $lines) = @_;
+  
+  	# Trim trailing whitespace
+  	$string =~ s/\s*\z//;
+  
+  	# Explitic null/undef
+  	return undef if $string eq '~';
+  
+  	# Single quote
+  	if ( $string =~ /^\'(.*?)\'(?:\s+\#.*)?\z/ ) {
+  		return '' unless defined $1;
+  		$string = $1;
+  		$string =~ s/\'\'/\'/g;
+  		return $string;
+  	}
+  
+  	# Double quote.
+  	# The commented out form is simpler, but overloaded the Perl regex
+  	# engine due to recursion and backtracking problems on strings
+  	# larger than 32,000ish characters. Keep it for reference purposes.
+  	# if ( $string =~ /^\"((?:\\.|[^\"])*)\"\z/ ) {
+  	if ( $string =~ /^\"([^\\"]*(?:\\.[^\\"]*)*)\"(?:\s+\#.*)?\z/ ) {
+  		# Reusing the variable is a little ugly,
+  		# but avoids a new variable and a string copy.
+  		$string = $1;
+  		$string =~ s/\\"/"/g;
+  		$string =~ s/\\([never\\fartz]|x([0-9a-fA-F]{2}))/(length($1)>1)?pack("H2",$2):$UNESCAPES{$1}/gex;
+  		return $string;
+  	}
+  
+  	# Special cases
+  	if ( $string =~ /^[\'\"!&]/ ) {
+  		die \"CPAN::Meta::YAML does not support a feature in line '$string'";
+  	}
+  	return {} if $string =~ /^{}(?:\s+\#.*)?\z/;
+  	return [] if $string =~ /^\[\](?:\s+\#.*)?\z/;
+  
+  	# Regular unquoted string
+  	if ( $string !~ /^[>|]/ ) {
+  		if (
+  			$string =~ /^(?:-(?:\s|$)|[\@\%\`])/
+  			or
+  			$string =~ /:(?:\s|$)/
+  		) {
+  			die \"CPAN::Meta::YAML found illegal characters in plain scalar: '$string'";
+  		}
+  		$string =~ s/\s+#.*\z//;
+  		return $string;
+  	}
+  
+  	# Error
+  	die \"CPAN::Meta::YAML failed to find multi-line scalar content" unless @$lines;
+  
+  	# Check the indent depth
+  	$lines->[0]   =~ /^(\s*)/;
+  	$indent->[-1] = length("$1");
+  	if ( defined $indent->[-2] and $indent->[-1] <= $indent->[-2] ) {
+  		die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
+  	}
+  
+  	# Pull the lines
+  	my @multiline = ();
+  	while ( @$lines ) {
+  		$lines->[0] =~ /^(\s*)/;
+  		last unless length($1) >= $indent->[-1];
+  		push @multiline, substr(shift(@$lines), length($1));
+  	}
+  
+  	my $j = (substr($string, 0, 1) eq '>') ? ' ' : "\n";
+  	my $t = (substr($string, 1, 1) eq '-') ? ''  : "\n";
+  	return join( $j, @multiline ) . $t;
   }
   
-  sub _unquote_double {
-      my ($self, $string) = @_;
-      return '' unless length $string;
-      $string =~ s/\\"/"/g;
-      $string =~
-          s{\\([Nnever\\fartz0b]|x([0-9a-fA-F]{2}))}
-           {(length($1)>1)?pack("H2",$2):$UNESCAPES{$1}}gex;
-      return $string;
+  # Parse an array
+  sub _read_array {
+  	my ($self, $array, $indent, $lines) = @_;
+  
+  	while ( @$lines ) {
+  		# Check for a new document
+  		if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
+  			while ( @$lines and $lines->[0] !~ /^---/ ) {
+  				shift @$lines;
+  			}
+  			return 1;
+  		}
+  
+  		# Check the indent level
+  		$lines->[0] =~ /^(\s*)/;
+  		if ( length($1) < $indent->[-1] ) {
+  			return 1;
+  		} elsif ( length($1) > $indent->[-1] ) {
+  			die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
+  		}
+  
+  		if ( $lines->[0] =~ /^(\s*\-\s+)[^\'\"]\S*\s*:(?:\s+|$)/ ) {
+  			# Inline nested hash
+  			my $indent2 = length("$1");
+  			$lines->[0] =~ s/-/ /;
+  			push @$array, { };
+  			$self->_read_hash( $array->[-1], [ @$indent, $indent2 ], $lines );
+  
+  		} elsif ( $lines->[0] =~ /^\s*\-(\s*)(.+?)\s*\z/ ) {
+  			# Array entry with a value
+  			shift @$lines;
+  			push @$array, $self->_read_scalar( "$2", [ @$indent, undef ], $lines );
+  
+  		} elsif ( $lines->[0] =~ /^\s*\-\s*\z/ ) {
+  			shift @$lines;
+  			unless ( @$lines ) {
+  				push @$array, undef;
+  				return 1;
+  			}
+  			if ( $lines->[0] =~ /^(\s*)\-/ ) {
+  				my $indent2 = length("$1");
+  				if ( $indent->[-1] == $indent2 ) {
+  					# Null array entry
+  					push @$array, undef;
+  				} else {
+  					# Naked indenter
+  					push @$array, [ ];
+  					$self->_read_array( $array->[-1], [ @$indent, $indent2 ], $lines );
+  				}
+  
+  			} elsif ( $lines->[0] =~ /^(\s*)\S/ ) {
+  				push @$array, { };
+  				$self->_read_hash( $array->[-1], [ @$indent, length("$1") ], $lines );
+  
+  			} else {
+  				die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
+  			}
+  
+  		} elsif ( defined $indent->[-2] and $indent->[-1] == $indent->[-2] ) {
+  			# This is probably a structure like the following...
+  			# ---
+  			# foo:
+  			# - list
+  			# bar: value
+  			#
+  			# ... so lets return and let the hash parser handle it
+  			return 1;
+  
+  		} else {
+  			die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
+  		}
+  	}
+  
+  	return 1;
   }
   
-  # Load a YAML scalar string to the actual Perl scalar
-  sub _load_scalar {
-      my ($self, $string, $indent, $lines) = @_;
+  # Parse an array
+  sub _read_hash {
+  	my ($self, $hash, $indent, $lines) = @_;
   
-      # Trim trailing whitespace
-      $string =~ s/\s*\z//;
+  	while ( @$lines ) {
+  		# Check for a new document
+  		if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
+  			while ( @$lines and $lines->[0] !~ /^---/ ) {
+  				shift @$lines;
+  			}
+  			return 1;
+  		}
   
-      # Explitic null/undef
-      return undef if $string eq '~';
+  		# Check the indent level
+  		$lines->[0] =~ /^(\s*)/;
+  		if ( length($1) < $indent->[-1] ) {
+  			return 1;
+  		} elsif ( length($1) > $indent->[-1] ) {
+  			die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
+  		}
   
-      # Single quote
-      if ( $string =~ /^$re_capture_single_quoted$re_trailing_comment\z/ ) {
-          return $self->_unquote_single($1);
-      }
+  		# Get the key
+  		unless ( $lines->[0] =~ s/^\s*([^\'\" ][^\n]*?)\s*:(\s+(?:\#.*)?|$)// ) {
+  			if ( $lines->[0] =~ /^\s*[?\'\"]/ ) {
+  				die \"CPAN::Meta::YAML does not support a feature in line '$lines->[0]'";
+  			}
+  			die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
+  		}
+  		my $key = $1;
   
-      # Double quote.
-      if ( $string =~ /^$re_capture_double_quoted$re_trailing_comment\z/ ) {
-          return $self->_unquote_double($1);
-      }
+  		# Do we have a value?
+  		if ( length $lines->[0] ) {
+  			# Yes
+  			$hash->{$key} = $self->_read_scalar( shift(@$lines), [ @$indent, undef ], $lines );
+  		} else {
+  			# An indent
+  			shift @$lines;
+  			unless ( @$lines ) {
+  				$hash->{$key} = undef;
+  				return 1;
+  			}
+  			if ( $lines->[0] =~ /^(\s*)-/ ) {
+  				$hash->{$key} = [];
+  				$self->_read_array( $hash->{$key}, [ @$indent, length($1) ], $lines );
+  			} elsif ( $lines->[0] =~ /^(\s*)./ ) {
+  				my $indent2 = length("$1");
+  				if ( $indent->[-1] >= $indent2 ) {
+  					# Null hash entry
+  					$hash->{$key} = undef;
+  				} else {
+  					$hash->{$key} = {};
+  					$self->_read_hash( $hash->{$key}, [ @$indent, length($1) ], $lines );
+  				}
+  			}
+  		}
+  	}
   
-      # Special cases
-      if ( $string =~ /^[\'\"!&]/ ) {
-          die \"CPAN::Meta::YAML does not support a feature in line '$string'";
-      }
-      return {} if $string =~ /^{}(?:\s+\#.*)?\z/;
-      return [] if $string =~ /^\[\](?:\s+\#.*)?\z/;
-  
-      # Regular unquoted string
-      if ( $string !~ /^[>|]/ ) {
-          die \"CPAN::Meta::YAML found illegal characters in plain scalar: '$string'"
-              if $string =~ /^(?:-(?:\s|$)|[\@\%\`])/ or
-                  $string =~ /:(?:\s|$)/;
-          $string =~ s/\s+#.*\z//;
-          return $string;
-      }
-  
-      # Error
-      die \"CPAN::Meta::YAML failed to find multi-line scalar content" unless @$lines;
-  
-      # Check the indent depth
-      $lines->[0]   =~ /^(\s*)/;
-      $indent->[-1] = length("$1");
-      if ( defined $indent->[-2] and $indent->[-1] <= $indent->[-2] ) {
-          die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
-      }
-  
-      # Pull the lines
-      my @multiline = ();
-      while ( @$lines ) {
-          $lines->[0] =~ /^(\s*)/;
-          last unless length($1) >= $indent->[-1];
-          push @multiline, substr(shift(@$lines), length($1));
-      }
-  
-      my $j = (substr($string, 0, 1) eq '>') ? ' ' : "\n";
-      my $t = (substr($string, 1, 1) eq '-') ? ''  : "\n";
-      return join( $j, @multiline ) . $t;
+  	return 1;
   }
-  
-  # Load an array
-  sub _load_array {
-      my ($self, $array, $indent, $lines) = @_;
-  
-      while ( @$lines ) {
-          # Check for a new document
-          if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
-              while ( @$lines and $lines->[0] !~ /^---/ ) {
-                  shift @$lines;
-              }
-              return 1;
-          }
-  
-          # Check the indent level
-          $lines->[0] =~ /^(\s*)/;
-          if ( length($1) < $indent->[-1] ) {
-              return 1;
-          } elsif ( length($1) > $indent->[-1] ) {
-              die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
-          }
-  
-          if ( $lines->[0] =~ /^(\s*\-\s+)[^\'\"]\S*\s*:(?:\s+|$)/ ) {
-              # Inline nested hash
-              my $indent2 = length("$1");
-              $lines->[0] =~ s/-/ /;
-              push @$array, { };
-              $self->_load_hash( $array->[-1], [ @$indent, $indent2 ], $lines );
-  
-          } elsif ( $lines->[0] =~ /^\s*\-\s*\z/ ) {
-              shift @$lines;
-              unless ( @$lines ) {
-                  push @$array, undef;
-                  return 1;
-              }
-              if ( $lines->[0] =~ /^(\s*)\-/ ) {
-                  my $indent2 = length("$1");
-                  if ( $indent->[-1] == $indent2 ) {
-                      # Null array entry
-                      push @$array, undef;
-                  } else {
-                      # Naked indenter
-                      push @$array, [ ];
-                      $self->_load_array(
-                          $array->[-1], [ @$indent, $indent2 ], $lines
-                      );
-                  }
-  
-              } elsif ( $lines->[0] =~ /^(\s*)\S/ ) {
-                  push @$array, { };
-                  $self->_load_hash(
-                      $array->[-1], [ @$indent, length("$1") ], $lines
-                  );
-  
-              } else {
-                  die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
-              }
-  
-          } elsif ( $lines->[0] =~ /^\s*\-(\s*)(.+?)\s*\z/ ) {
-              # Array entry with a value
-              shift @$lines;
-              push @$array, $self->_load_scalar(
-                  "$2", [ @$indent, undef ], $lines
-              );
-  
-          } elsif ( defined $indent->[-2] and $indent->[-1] == $indent->[-2] ) {
-              # This is probably a structure like the following...
-              # ---
-              # foo:
-              # - list
-              # bar: value
-              #
-              # ... so lets return and let the hash parser handle it
-              return 1;
-  
-          } else {
-              die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
-          }
-      }
-  
-      return 1;
-  }
-  
-  # Load a hash
-  sub _load_hash {
-      my ($self, $hash, $indent, $lines) = @_;
-  
-      while ( @$lines ) {
-          # Check for a new document
-          if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
-              while ( @$lines and $lines->[0] !~ /^---/ ) {
-                  shift @$lines;
-              }
-              return 1;
-          }
-  
-          # Check the indent level
-          $lines->[0] =~ /^(\s*)/;
-          if ( length($1) < $indent->[-1] ) {
-              return 1;
-          } elsif ( length($1) > $indent->[-1] ) {
-              die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
-          }
-  
-          # Find the key
-          my $key;
-  
-          # Quoted keys
-          if ( $lines->[0] =~
-              s/^\s*$re_capture_single_quoted$re_key_value_separator//
-          ) {
-              $key = $self->_unquote_single($1);
-          }
-          elsif ( $lines->[0] =~
-              s/^\s*$re_capture_double_quoted$re_key_value_separator//
-          ) {
-              $key = $self->_unquote_double($1);
-          }
-          elsif ( $lines->[0] =~
-              s/^\s*$re_capture_unquoted_key$re_key_value_separator//
-          ) {
-              $key = $1;
-              $key =~ s/\s+$//;
-          }
-          elsif ( $lines->[0] =~ /^\s*\?/ ) {
-              die \"CPAN::Meta::YAML does not support a feature in line '$lines->[0]'";
-          }
-          else {
-              die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
-          }
-  
-          # Do we have a value?
-          if ( length $lines->[0] ) {
-              # Yes
-              $hash->{$key} = $self->_load_scalar(
-                  shift(@$lines), [ @$indent, undef ], $lines
-              );
-          } else {
-              # An indent
-              shift @$lines;
-              unless ( @$lines ) {
-                  $hash->{$key} = undef;
-                  return 1;
-              }
-              if ( $lines->[0] =~ /^(\s*)-/ ) {
-                  $hash->{$key} = [];
-                  $self->_load_array(
-                      $hash->{$key}, [ @$indent, length($1) ], $lines
-                  );
-              } elsif ( $lines->[0] =~ /^(\s*)./ ) {
-                  my $indent2 = length("$1");
-                  if ( $indent->[-1] >= $indent2 ) {
-                      # Null hash entry
-                      $hash->{$key} = undef;
-                  } else {
-                      $hash->{$key} = {};
-                      $self->_load_hash(
-                          $hash->{$key}, [ @$indent, length($1) ], $lines
-                      );
-                  }
-              }
-          }
-      }
-  
-      return 1;
-  }
-  
-  
-  ###
-  # Dumper functions:
   
   # Save an object to a file
-  sub _dump_file {
-      my $self = shift;
+  sub write {
+  	my $self = shift;
+  	my $file = shift or return $self->_error('No file name provided');
   
-      require Fcntl;
+  	# Write it to the file
+  	open( CFG, '>' . $file ) or return $self->_error(
+  		"Failed to open file '$file' for writing: $!"
+  		);
+  	print CFG $self->write_string;
+  	close CFG;
   
-      # Check the file
-      my $file = shift or $self->_error( 'You did not specify a file name' );
-  
-      my $fh;
-      # flock if available (or warn if not possible for OS-specific reasons)
-      if ( _can_flock() ) {
-          # Open without truncation (truncate comes after lock)
-          my $flags = Fcntl::O_WRONLY()|Fcntl::O_CREAT();
-          sysopen( $fh, $file, $flags );
-          unless ( $fh ) {
-              $self->_error("Failed to open file '$file' for writing: $!");
-          }
-  
-          # Use no translation and strict UTF-8
-          binmode( $fh, ":raw:encoding(UTF-8)");
-  
-          flock( $fh, Fcntl::LOCK_EX() )
-              or warn "Couldn't lock '$file' for reading: $!";
-  
-          # truncate and spew contents
-          truncate $fh, 0;
-          seek $fh, 0, 0;
-      }
-      else {
-          open $fh, ">:unix:encoding(UTF-8)", $file;
-      }
-  
-      # serialize and spew to the handle
-      print {$fh} $self->_dump_string;
-  
-      # close the file (release the lock)
-      unless ( close $fh ) {
-          $self->_error("Failed to close file '$file': $!");
-      }
-  
-      return 1;
+  	return 1;
   }
   
   # Save an object to a string
-  sub _dump_string {
-      my $self = shift;
-      return '' unless ref $self && @$self;
+  sub write_string {
+  	my $self = shift;
+  	return '' unless @$self;
   
-      # Iterate over the documents
-      my $indent = 0;
-      my @lines  = ();
+  	# Iterate over the documents
+  	my $indent = 0;
+  	my @lines  = ();
+  	foreach my $cursor ( @$self ) {
+  		push @lines, '---';
   
-      eval {
-          foreach my $cursor ( @$self ) {
-              push @lines, '---';
+  		# An empty document
+  		if ( ! defined $cursor ) {
+  			# Do nothing
   
-              # An empty document
-              if ( ! defined $cursor ) {
-                  # Do nothing
+  		# A scalar document
+  		} elsif ( ! ref $cursor ) {
+  			$lines[-1] .= ' ' . $self->_write_scalar( $cursor, $indent );
   
-              # A scalar document
-              } elsif ( ! ref $cursor ) {
-                  $lines[-1] .= ' ' . $self->_dump_scalar( $cursor );
+  		# A list at the root
+  		} elsif ( ref $cursor eq 'ARRAY' ) {
+  			unless ( @$cursor ) {
+  				$lines[-1] .= ' []';
+  				next;
+  			}
+  			push @lines, $self->_write_array( $cursor, $indent, {} );
   
-              # A list at the root
-              } elsif ( ref $cursor eq 'ARRAY' ) {
-                  unless ( @$cursor ) {
-                      $lines[-1] .= ' []';
-                      next;
-                  }
-                  push @lines, $self->_dump_array( $cursor, $indent, {} );
+  		# A hash at the root
+  		} elsif ( ref $cursor eq 'HASH' ) {
+  			unless ( %$cursor ) {
+  				$lines[-1] .= ' {}';
+  				next;
+  			}
+  			push @lines, $self->_write_hash( $cursor, $indent, {} );
   
-              # A hash at the root
-              } elsif ( ref $cursor eq 'HASH' ) {
-                  unless ( %$cursor ) {
-                      $lines[-1] .= ' {}';
-                      next;
-                  }
-                  push @lines, $self->_dump_hash( $cursor, $indent, {} );
+  		} else {
+  			Carp::croak("Cannot serialize " . ref($cursor));
+  		}
+  	}
   
-              } else {
-                  die \("Cannot serialize " . ref($cursor));
-              }
-          }
-      };
-      if ( ref $@ eq 'SCALAR' ) {
-          $self->_error(${$@});
-      } elsif ( $@ ) {
-          $self->_error($@);
-      }
-  
-      join '', map { "$_\n" } @lines;
+  	join '', map { "$_\n" } @lines;
   }
   
-  sub _has_internal_string_value {
-      my $value = shift;
-      my $b_obj = B::svref_2object(\$value);  # for round trip problem
-      return $b_obj->FLAGS & B::SVf_POK();
+  sub _write_scalar {
+  	my $string = $_[1];
+  	return '~'  unless defined $string;
+  	return "''" unless length  $string;
+  	if ( $string =~ /[\x00-\x08\x0b-\x0d\x0e-\x1f\"\'\n]/ ) {
+  		$string =~ s/\\/\\\\/g;
+  		$string =~ s/"/\\"/g;
+  		$string =~ s/\n/\\n/g;
+  		$string =~ s/([\x00-\x1f])/\\$UNPRINTABLE[ord($1)]/g;
+  		return qq|"$string"|;
+  	}
+  	if ( $string =~ /(?:^\W|\s|:\z)/ or $QUOTE{$string} ) {
+  		return "'$string'";
+  	}
+  	return $string;
   }
   
-  sub _dump_scalar {
-      my $string = $_[1];
-      my $is_key = $_[2];
-      # Check this before checking length or it winds up looking like a string!
-      my $has_string_flag = _has_internal_string_value($string);
-      return '~'  unless defined $string;
-      return "''" unless length  $string;
-      if (Scalar::Util::looks_like_number($string)) {
-          # keys and values that have been used as strings get quoted
-          if ( $is_key || $has_string_flag ) {
-              return qq['$string'];
-          }
-          else {
-              return $string;
-          }
-      }
-      if ( $string =~ /[\x00-\x09\x0b-\x0d\x0e-\x1f\x7f-\x9f\'\n]/ ) {
-          $string =~ s/\\/\\\\/g;
-          $string =~ s/"/\\"/g;
-          $string =~ s/\n/\\n/g;
-          $string =~ s/[\x85]/\\N/g;
-          $string =~ s/([\x00-\x1f])/\\$UNPRINTABLE[ord($1)]/g;
-          $string =~ s/([\x7f-\x9f])/'\x' . sprintf("%X",ord($1))/ge;
-          return qq|"$string"|;
-      }
-      if ( $string =~ /(?:^[~!@#%&*|>?:,'"`{}\[\]]|^-+$|\s|:\z)/ or
-          $QUOTE{$string}
-      ) {
-          return "'$string'";
-      }
-      return $string;
+  sub _write_array {
+  	my ($self, $array, $indent, $seen) = @_;
+  	if ( $seen->{refaddr($array)}++ ) {
+  		die "CPAN::Meta::YAML does not support circular references";
+  	}
+  	my @lines  = ();
+  	foreach my $el ( @$array ) {
+  		my $line = ('  ' x $indent) . '-';
+  		my $type = ref $el;
+  		if ( ! $type ) {
+  			$line .= ' ' . $self->_write_scalar( $el, $indent + 1 );
+  			push @lines, $line;
+  
+  		} elsif ( $type eq 'ARRAY' ) {
+  			if ( @$el ) {
+  				push @lines, $line;
+  				push @lines, $self->_write_array( $el, $indent + 1, $seen );
+  			} else {
+  				$line .= ' []';
+  				push @lines, $line;
+  			}
+  
+  		} elsif ( $type eq 'HASH' ) {
+  			if ( keys %$el ) {
+  				push @lines, $line;
+  				push @lines, $self->_write_hash( $el, $indent + 1, $seen );
+  			} else {
+  				$line .= ' {}';
+  				push @lines, $line;
+  			}
+  
+  		} else {
+  			die "CPAN::Meta::YAML does not support $type references";
+  		}
+  	}
+  
+  	@lines;
   }
   
-  sub _dump_array {
-      my ($self, $array, $indent, $seen) = @_;
-      if ( $seen->{refaddr($array)}++ ) {
-          die \"CPAN::Meta::YAML does not support circular references";
-      }
-      my @lines  = ();
-      foreach my $el ( @$array ) {
-          my $line = ('  ' x $indent) . '-';
-          my $type = ref $el;
-          if ( ! $type ) {
-              $line .= ' ' . $self->_dump_scalar( $el );
-              push @lines, $line;
+  sub _write_hash {
+  	my ($self, $hash, $indent, $seen) = @_;
+  	if ( $seen->{refaddr($hash)}++ ) {
+  		die "CPAN::Meta::YAML does not support circular references";
+  	}
+  	my @lines  = ();
+  	foreach my $name ( sort keys %$hash ) {
+  		my $el   = $hash->{$name};
+  		my $line = ('  ' x $indent) . "$name:";
+  		my $type = ref $el;
+  		if ( ! $type ) {
+  			$line .= ' ' . $self->_write_scalar( $el, $indent + 1 );
+  			push @lines, $line;
   
-          } elsif ( $type eq 'ARRAY' ) {
-              if ( @$el ) {
-                  push @lines, $line;
-                  push @lines, $self->_dump_array( $el, $indent + 1, $seen );
-              } else {
-                  $line .= ' []';
-                  push @lines, $line;
-              }
+  		} elsif ( $type eq 'ARRAY' ) {
+  			if ( @$el ) {
+  				push @lines, $line;
+  				push @lines, $self->_write_array( $el, $indent + 1, $seen );
+  			} else {
+  				$line .= ' []';
+  				push @lines, $line;
+  			}
   
-          } elsif ( $type eq 'HASH' ) {
-              if ( keys %$el ) {
-                  push @lines, $line;
-                  push @lines, $self->_dump_hash( $el, $indent + 1, $seen );
-              } else {
-                  $line .= ' {}';
-                  push @lines, $line;
-              }
+  		} elsif ( $type eq 'HASH' ) {
+  			if ( keys %$el ) {
+  				push @lines, $line;
+  				push @lines, $self->_write_hash( $el, $indent + 1, $seen );
+  			} else {
+  				$line .= ' {}';
+  				push @lines, $line;
+  			}
   
-          } else {
-              die \"CPAN::Meta::YAML does not support $type references";
-          }
-      }
+  		} else {
+  			die "CPAN::Meta::YAML does not support $type references";
+  		}
+  	}
   
-      @lines;
+  	@lines;
   }
-  
-  sub _dump_hash {
-      my ($self, $hash, $indent, $seen) = @_;
-      if ( $seen->{refaddr($hash)}++ ) {
-          die \"CPAN::Meta::YAML does not support circular references";
-      }
-      my @lines  = ();
-      foreach my $name ( sort keys %$hash ) {
-          my $el   = $hash->{$name};
-          my $line = ('  ' x $indent) . $self->_dump_scalar($name, 1) . ":";
-          my $type = ref $el;
-          if ( ! $type ) {
-              $line .= ' ' . $self->_dump_scalar( $el );
-              push @lines, $line;
-  
-          } elsif ( $type eq 'ARRAY' ) {
-              if ( @$el ) {
-                  push @lines, $line;
-                  push @lines, $self->_dump_array( $el, $indent + 1, $seen );
-              } else {
-                  $line .= ' []';
-                  push @lines, $line;
-              }
-  
-          } elsif ( $type eq 'HASH' ) {
-              if ( keys %$el ) {
-                  push @lines, $line;
-                  push @lines, $self->_dump_hash( $el, $indent + 1, $seen );
-              } else {
-                  $line .= ' {}';
-                  push @lines, $line;
-              }
-  
-          } else {
-              die \"CPAN::Meta::YAML does not support $type references";
-          }
-      }
-  
-      @lines;
-  }
-  
-  
-  
-  #####################################################################
-  # DEPRECATED API methods:
-  
-  # Error storage (DEPRECATED as of 1.57)
-  our $errstr    = '';
   
   # Set error
   sub _error {
-      require Carp;
-      $errstr = $_[1];
-      $errstr =~ s/ at \S+ line \d+.*//;
-      Carp::croak( $errstr );
+  	$CPAN::Meta::YAML::errstr = $_[1];
+  	undef;
   }
   
   # Retrieve error
-  my $errstr_warned;
   sub errstr {
-      require Carp;
-      Carp::carp( "CPAN::Meta::YAML->errstr and \$CPAN::Meta::YAML::errstr is deprecated" )
-          unless $errstr_warned++;
-      $errstr;
+  	$CPAN::Meta::YAML::errstr;
   }
+  
   
   
   
   
   #####################################################################
-  # Helper functions. Possibly not needed.
+  # YAML Compatibility
   
+  sub Dump {
+  	CPAN::Meta::YAML->new(@_)->write_string;
+  }
   
-  # Use to detect nv or iv
-  use B;
+  sub Load {
+  	my $self = CPAN::Meta::YAML->read_string(@_);
+  	unless ( $self ) {
+  		Carp::croak("Failed to load YAML document from string");
+  	}
+  	if ( wantarray ) {
+  		return @$self;
+  	} else {
+  		# To match YAML.pm, return the last document
+  		return $self->[-1];
+  	}
+  }
   
-  # XXX-INGY Is flock CPAN::Meta::YAML's responsibility?
-  # Some platforms can't flock :-(
-  # XXX-XDG I think it is.  When reading and writing files, we ought
-  # to be locking whenever possible.  People (foolishly) use YAML
-  # files for things like session storage, which has race issues.
-  my $HAS_FLOCK;
-  sub _can_flock {
-      if ( defined $HAS_FLOCK ) {
-          return $HAS_FLOCK;
-      }
-      else {
-          require Config;
-          my $c = \%Config::Config;
-          $HAS_FLOCK = grep { $c->{$_} } qw/d_flock d_fcntl_can_lock d_lockf/;
-          require Fcntl if $HAS_FLOCK;
-          return $HAS_FLOCK;
-      }
+  BEGIN {
+  	*freeze = *Dump;
+  	*thaw   = *Load;
+  }
+  
+  sub DumpFile {
+  	my $file = shift;
+  	CPAN::Meta::YAML->new(@_)->write($file);
+  }
+  
+  sub LoadFile {
+  	my $self = CPAN::Meta::YAML->read($_[0]);
+  	unless ( $self ) {
+  		Carp::croak("Failed to load YAML document from '" . ($_[0] || '') . "'");
+  	}
+  	if ( wantarray ) {
+  		return @$self;
+  	} else {
+  		# Return only the last document to match YAML.pm, 
+  		return $self->[-1];
+  	}
   }
   
   
-  # XXX-INGY Is this core in 5.8.1? Can we remove this?
-  # XXX-XDG Scalar::Util 1.18 didn't land until 5.8.8, so we need this
+  
+  
+  
   #####################################################################
   # Use Scalar::Util if possible, otherwise emulate it
   
   BEGIN {
-      local $@;
-      if ( eval { require Scalar::Util }
-        && $Scalar::Util::VERSION
-        && eval($Scalar::Util::VERSION) >= 1.18
-      ) {
-          *refaddr = *Scalar::Util::refaddr;
-      }
-      else {
-          eval <<'END_PERL';
+  	local $@;
+  	eval {
+  		require Scalar::Util;
+  	};
+  	my $v = eval("$Scalar::Util::VERSION") || 0;
+  	if ( $@ or $v < 1.18 ) {
+  		eval <<'END_PERL';
   # Scalar::Util failed to load or too old
   sub refaddr {
-      my $pkg = ref($_[0]) or return undef;
-      if ( !! UNIVERSAL::can($_[0], 'can') ) {
-          bless $_[0], 'Scalar::Util::Fake';
-      } else {
-          $pkg = undef;
-      }
-      "$_[0]" =~ /0x(\w+)/;
-      my $i = do { no warnings 'portable'; hex $1 };
-      bless $_[0], $pkg if defined $pkg;
-      $i;
+  	my $pkg = ref($_[0]) or return undef;
+  	if ( !! UNIVERSAL::can($_[0], 'can') ) {
+  		bless $_[0], 'Scalar::Util::Fake';
+  	} else {
+  		$pkg = undef;
+  	}
+  	"$_[0]" =~ /0x(\w+)/;
+  	my $i = do { local $^W; hex $1 };
+  	bless $_[0], $pkg if defined $pkg;
+  	$i;
   }
   END_PERL
-      }
+  	} else {
+  		*refaddr = *Scalar::Util::refaddr;
+  	}
   }
-  
-  
-  
   
   1;
   
-  # XXX-INGY Doc notes I'm putting up here. Changing the doc when it's wrong
-  # but leaving grey area stuff up here.
-  #
-  # I would like to change Read/Write to Load/Dump below without
-  # changing the actual API names.
-  #
-  # It might be better to put Load/Dump API in the SYNOPSIS instead of the
-  # dubious OO API.
-  #
-  # null and bool explanations may be outdated.
+  
   
   =pod
-  
-  =encoding UTF-8
   
   =head1 NAME
   
@@ -11954,7 +10944,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   =head1 VERSION
   
-  version 0.012
+  version 0.008
   
   =head1 SYNOPSIS
   
@@ -11990,7 +10980,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   This module is currently derived from L<YAML::Tiny> by Adam Kennedy.  If
   there are bugs in how it parses a particular META.yml file, please file
   a bug report in the YAML::Tiny bugtracker:
-  L<https://rt.cpan.org/Public/Dist/Display.html?Name=YAML-Tiny>
+  L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=YAML-Tiny>
   
   =head1 SEE ALSO
   
@@ -12003,7 +10993,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<https://github.com/dagolden/CPAN-Meta-YAML/issues>.
+  at L<http://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta-YAML>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -12011,9 +11001,9 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<https://github.com/dagolden/CPAN-Meta-YAML>
+  L<https://github.com/dagolden/cpan-meta-yaml>
   
-    git clone https://github.com/dagolden/CPAN-Meta-YAML.git
+    git clone https://github.com/dagolden/cpan-meta-yaml.git
   
   =head1 AUTHORS
   
@@ -12037,6 +11027,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   the same terms as the Perl 5 programming language system itself.
   
   =cut
+  
   
   __END__
   

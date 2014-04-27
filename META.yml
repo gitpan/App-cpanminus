@@ -31,7 +31,7 @@ resources:
   bugtracker: https://github.com/miyagawa/cpanminus/issues
   homepage: https://github.com/miyagawa/cpanminus
   repository: https://github.com/miyagawa/cpanminus.git
-version: '1.7002'
+version: '1.7003'
 x_contributors:
   - 'Alessandro Ghedini <al3xbio@gmail.com>'
   - 'Andrew Rodland <andrew@cleverdomain.org>'
@@ -86,6 +86,7 @@ x_contributors:
   - 'kmx <kmx@cpan.org>'
   - 'lestrrat <lestrrat+github@gmail.com>'
   - 'motemen <motemen@gmail.com>'
+  - 'moznion <moznion@gmail.com>'
   - 'reezer <kind@gmx.at>'
   - 'robario <webmaster@robario.com>'
   - 'vti <viacheslav.t@gmail.com>'
