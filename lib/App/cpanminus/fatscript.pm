@@ -18,9 +18,9 @@ our $VERSION = "1.6928";
 BEGIN {
 my %fatpacked;
 
-$fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
+$fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7102";
+  our $VERSION = "1.7002";
   
   =encoding utf8
   
@@ -307,7 +307,7 @@ $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   1;
 APP_CPANMINUS
 
-$fatpacked{"App/cpanminus/CPANVersion.pm"} = <<'APP_CPANMINUS_CPANVERSION';
+$fatpacked{"App/cpanminus/CPANVersion.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS_CPANVERSION';
   package App::cpanminus::CPANVersion;
   # copy of CPAN::Version since it's not core on older 5.8
   
@@ -440,7 +440,7 @@ $fatpacked{"App/cpanminus/CPANVersion.pm"} = <<'APP_CPANMINUS_CPANVERSION';
   __END__
 APP_CPANMINUS_CPANVERSION
 
-$fatpacked{"App/cpanminus/Dependency.pm"} = <<'APP_CPANMINUS_DEPENDENCY';
+$fatpacked{"App/cpanminus/Dependency.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS_DEPENDENCY';
   package App::cpanminus::Dependency;
   use strict;
   use CPAN::Meta::Requirements;
@@ -493,7 +493,7 @@ $fatpacked{"App/cpanminus/Dependency.pm"} = <<'APP_CPANMINUS_DEPENDENCY';
   1;
 APP_CPANMINUS_DEPENDENCY
 
-$fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
+$fatpacked{"App/cpanminus/ParsePM.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS_PARSEPM';
   package App::cpanminus::ParsePM;
   # fork of Parse::PMFile, use JSON::PP instead of JSON
   
@@ -1037,7 +1037,7 @@ $fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
   __END__
 APP_CPANMINUS_PARSEPM
 
-$fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
+$fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS_SCRIPT';
   package App::cpanminus::script;
   use strict;
   use Config;
@@ -1203,10 +1203,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           'q|quiet!'  => \$self->{quiet},
           'h|help'    => sub { $self->{action} = 'show_help' },
           'V|version' => sub { $self->{action} = 'show_version' },
-          'perl=s'    => sub {
-              $self->diag("--perl is deprecated since it's known to be fragile in figuring out dependencies. Run `$_[1] -S cpanm` instead.\n", 1);
-              $self->{perl} = $_[1];
-          },
+          'perl=s'    => \$self->{perl},
           'l|local-lib=s' => sub { $self->{local_lib} = $self->maybe_abs($_[1]) },
           'L|local-lib-contained=s' => sub {
               $self->{local_lib} = $self->maybe_abs($_[1]);
@@ -1453,8 +1450,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
               my $self = shift;
               my $temp_log = "$home/build.log." . time . ".$$";
               File::Copy::copy($log, $temp_log)
-                  && unlink($final_log)
-                  && rename($temp_log, $final_log);
+                  && unlink($final_log);
+              rename($temp_log, $final_log);
           }
       }
   
@@ -1926,7 +1923,8 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
   sub local_lib_target {
       my($self, $root) = @_;
-      (grep { $_ ne '' } split /\Q$Config{path_sep}/, $root)[-1];
+      # local::lib 1.008025 changed the order of PERL_LOCAL_LIB_ROOT
+      (grep { $_ ne '' } split /\Q$Config{path_sep}/, $root)[0];
   }
   
   sub bootstrap_local_lib {
@@ -2391,7 +2389,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           }
       }
   
-      my $dist = $self->resolve_name($module, $version, 1);
+      my $dist = $self->resolve_name($module, $version);
       unless ($dist) {
           my $what = $module . ($version ? " ($version)" : "");
           $self->diag_fail("Couldn't find module or a distribution $what", 1);
@@ -2782,12 +2780,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   }
   
   sub resolve_name {
-      my($self, $module, $version, $allow_file) = @_;
-  
-      # Git
-      if ($module =~ /(?:^git(?:\+\w+)?:|\.git(?:@.+)?$)/) {
-          return $self->git_uri($module);
-      }
+      my($self, $module, $version) = @_;
   
       # URL
       if ($module =~ /^(ftp|https?|file):/) {
@@ -2799,7 +2792,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       # Directory
-      if ($allow_file && $module =~ m!^[\./]! && -d $module) {
+      if ($module =~ m!^[\./]! && -d $module) {
           return {
               source => 'local',
               dir => Cwd::abs_path($module),
@@ -2807,11 +2800,16 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       }
   
       # File
-      if ($allow_file && -f $module) {
+      if (-f $module) {
           return {
               source => 'local',
               uris => [ "file://" . Cwd::abs_path($module) ],
           };
+      }
+  
+      # Git
+      if ($module =~ /(?:^git:|\.git(?:@.+)?$)/) {
+          return $self->git_uri($module);
       }
   
       # cpan URI
@@ -2832,7 +2830,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   sub cpan_module {
       my($self, $module, $dist, $version) = @_;
   
-      my $dist = $self->resolve_name($dist, undef, 0);
+      my $dist = $self->cpan_dist($dist);
       $dist->{module} = $module;
       $dist->{module_version} = $version if $version && $version ne 'undef';
   
@@ -2874,9 +2872,6 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
       ($uri, my $commitish) = split /(?<=\.git)@/i, $uri, 2;
   
-      # git CLI doesn't support git+http:// etc.
-      $uri =~ s/^git\+//;
-  
       my $dir = File::Temp::tempdir(CLEANUP => 1);
   
       $self->mask_output( diag_progress => "Cloning $uri" );
@@ -2887,34 +2882,20 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
           return;
       }
   
-      my $name = File::Basename::basename($uri);
-      $name =~ s/\.git$//;
-  
-      my $rev;
-      {
+      if ($commitish) {
           require File::pushd;
           my $dir = File::pushd::pushd($dir);
   
-          if ($commitish) {
-              unless ($self->run([ 'git', 'checkout', $commitish ])) {
-                  $self->diag_fail("Failed to checkout '$commitish' in git repository $uri\n");
-                  return;
-              }
+          unless ($self->run([ 'git', 'checkout', $commitish ])) {
+              $self->diag_fail("Failed to checkout '$commitish' in git repository $uri\n");
+              return;
           }
-  
-          chomp($rev = `git rev-parse --short HEAD`);
       }
   
       $self->diag_ok;
   
       return {
-          source => 'git',
-          dist   => $name,
-          version  => $rev,
-          revision => $rev,
-          distvname => "$name-$rev",
-          uri    => $uri,
-          ref    => $commitish,
+          source => 'local',
           dir    => $dir,
       };
   }
@@ -3169,7 +3150,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       $self->diag_ok($configure_state->{configured_ok} ? "OK" : "N/A");
   
       $dist->{provides} = $self->extract_packages($dist->{cpanmeta}, ".")
-          if $dist->{cpanmeta} && ($dist->{source} eq 'cpan' or $dist->{source} eq 'git');
+          if $dist->{cpanmeta} && $dist->{source} eq 'cpan';
   
       # install direct 'test' dependencies for --installdeps, even with --notest
       my $root_target = (($self->{installdeps} or $self->{showdeps}) and $depth == 0);
@@ -3454,7 +3435,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   sub save_meta {
       my($self, $module, $dist, $module_name, $config_deps, $build_deps) = @_;
   
-      return unless $dist->{distvname} && ($dist->{source} eq 'cpan' or $dist->{source} eq 'git');
+      return unless $dist->{distvname} && $dist->{source} eq 'cpan';
   
       my $base = ($ENV{PERL_MM_OPT} || '') =~ /INSTALL_BASE=/
           ? ($self->install_base($ENV{PERL_MM_OPT}) . "/lib/perl5") : $Config{sitelibexp};
@@ -3464,17 +3445,13 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
       File::Path::mkpath("blib/meta", 0, 0777);
   
       my $local = {
-          source => $dist->{source},
-          name   => $module_name,
+          name => $module_name,
           target => $module,
           version => exists $provides->{$module_name}
               ? ($provides->{$module_name}{version} || $dist->{version}) : $dist->{version},
           dist => $dist->{distvname},
           pathname => $dist->{pathname},
           provides => $provides,
-          # for git
-          uri => $dist->{uri},
-          revision => $dist->{revision},
       };
   
       require JSON::PP;
@@ -4120,7 +4097,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   1;
 APP_CPANMINUS_SCRIPT
 
-$fatpacked{"CPAN/DistnameInfo.pm"} = <<'CPAN_DISTNAMEINFO';
+$fatpacked{"CPAN/DistnameInfo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_DISTNAMEINFO';
   
   package CPAN::DistnameInfo;
   
@@ -4328,23 +4305,86 @@ $fatpacked{"CPAN/DistnameInfo.pm"} = <<'CPAN_DISTNAMEINFO';
   
 CPAN_DISTNAMEINFO
 
-$fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
+$fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META';
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
+  # =head1 SYNOPSIS
+  #
+  #     use v5.10;
+  #     use strict;
+  #     use warnings;
+  #     use CPAN::Meta;
+  #     use Module::Load;
+  #
+  #     my $meta = CPAN::Meta->load_file('META.json');
+  #
+  #     printf "testing requirements for %s version %s\n",
+  #     $meta->name,
+  #     $meta->version;
+  #
+  #     my $prereqs = $meta->effective_prereqs;
+  #
+  #     for my $phase ( qw/configure runtime build test/ ) {
+  #         say "Requirements for $phase:";
+  #         my $reqs = $prereqs->requirements_for($phase, "requires");
+  #         for my $module ( sort $reqs->required_modules ) {
+  #             my $status;
+  #             if ( eval { load $module unless $module eq 'perl'; 1 } ) {
+  #                 my $version = $module eq 'perl' ? $] : $module->VERSION;
+  #                 $status = $reqs->accepts_module($module, $version)
+  #                         ? "$version ok" : "$version not ok";
+  #             } else {
+  #                 $status = "missing"
+  #             };
+  #             say "  $module ($status)";
+  #         }
+  #     }
+  #
+  # =head1 DESCRIPTION
+  #
+  # Software distributions released to the CPAN include a F<META.json> or, for
+  # older distributions, F<META.yml>, which describes the distribution, its
+  # contents, and the requirements for building and installing the distribution.
+  # The data structure stored in the F<META.json> file is described in
+  # L<CPAN::Meta::Spec>.
+  #
+  # CPAN::Meta provides a simple class to represent this distribution metadata (or
+  # I<distmeta>), along with some helpful methods for interrogating that data.
+  #
+  # The documentation below is only for the methods of the CPAN::Meta object.  For
+  # information on the meaning of individual fields, consult the spec.
+  #
+  # =cut
   
   use Carp qw(carp croak);
   use CPAN::Meta::Feature;
   use CPAN::Meta::Prereqs;
   use CPAN::Meta::Converter;
   use CPAN::Meta::Validator;
-  use Parse::CPAN::Meta 1.4403 ();
+  use Parse::CPAN::Meta 1.4414 ();
   
   BEGIN { *_dclone = \&CPAN::Meta::Converter::_dclone }
   
+  # =head1 STRING DATA
+  #
+  # The following methods return a single value, which is the value for the
+  # corresponding entry in the distmeta structure.  Values should be either undef
+  # or strings.
+  #
+  # =for :list
+  # * abstract
+  # * description
+  # * dynamic_config
+  # * generated_by
+  # * name
+  # * release_status
+  # * version
+  #
+  # =cut
   
   BEGIN {
     my @STRING_READERS = qw(
@@ -4363,6 +4403,20 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     }
   }
   
+  # =head1 LIST DATA
+  #
+  # These methods return lists of string values, which might be represented in the
+  # distmeta structure as arrayrefs or scalars:
+  #
+  # =for :list
+  # * authors
+  # * keywords
+  # * licenses
+  #
+  # The C<authors> and C<licenses> methods may also be called as C<author> and
+  # C<license>, respectively, to match the field name in the distmeta structure.
+  #
+  # =cut
   
   BEGIN {
     my @LIST_READERS = qw(
@@ -4386,6 +4440,20 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   sub authors  { $_[0]->author }
   sub licenses { $_[0]->license }
   
+  # =head1 MAP DATA
+  #
+  # These readers return hashrefs of arbitrary unblessed data structures, each
+  # described more fully in the specification:
+  #
+  # =for :list
+  # * meta_spec
+  # * resources
+  # * provides
+  # * no_index
+  # * prereqs
+  # * optional_features
+  #
+  # =cut
   
   BEGIN {
     my @MAP_READERS = qw(
@@ -4409,6 +4477,16 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     }
   }
   
+  # =head1 CUSTOM DATA
+  #
+  # A list of custom keys are available from the C<custom_keys> method and
+  # particular keys may be retrieved with the C<custom> method.
+  #
+  #   say $meta->custom($_) for $meta->custom_keys;
+  #
+  # If a custom key refers to a data structure, a deep clone is returned.
+  #
+  # =cut
   
   sub custom_keys {
     return grep { /^x_/i } keys %{$_[0]};
@@ -4421,6 +4499,29 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $value;
   }
   
+  # =method new
+  #
+  #   my $meta = CPAN::Meta->new($distmeta_struct, \%options);
+  #
+  # Returns a valid CPAN::Meta object or dies if the supplied metadata hash
+  # reference fails to validate.  Older-format metadata will be up-converted to
+  # version 2 if they validate against the original stated specification.
+  #
+  # It takes an optional hashref of options. Valid options include:
+  #
+  # =over
+  #
+  # =item *
+  #
+  # lazy_validation -- if true, new will attempt to convert the given metadata
+  # to version 2 before attempting to validate it.  This means than any
+  # fixable errors will be handled by CPAN::Meta::Converter before validation.
+  # (Note that this might result in invalid optional data being silently
+  # dropped.)  The default is false.
+  #
+  # =back
+  #
+  # =cut
   
   sub _new {
     my ($class, $struct, $options) = @_;
@@ -4461,6 +4562,15 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $self;
   }
   
+  # =method create
+  #
+  #   my $meta = CPAN::Meta->create($distmeta_struct, \%options);
+  #
+  # This is same as C<new()>, except that C<generated_by> and C<meta-spec> fields
+  # will be generated if not provided.  This means the metadata structure is
+  # assumed to otherwise follow the latest L<CPAN::Meta::Spec>.
+  #
+  # =cut
   
   sub create {
     my ($class, $struct, $options) = @_;
@@ -4472,6 +4582,19 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $self;
   }
   
+  # =method load_file
+  #
+  #   my $meta = CPAN::Meta->load_file($distmeta_file, \%options);
+  #
+  # Given a pathname to a file containing metadata, this deserializes the file
+  # according to its file suffix and constructs a new C<CPAN::Meta> object, just
+  # like C<new()>.  It will die if the deserialized version fails to validate
+  # against its stated specification version.
+  #
+  # It takes the same options as C<new()> but C<lazy_validation> defaults to
+  # true.
+  #
+  # =cut
   
   sub load_file {
     my ($class, $file, $options) = @_;
@@ -4489,6 +4612,14 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $self;
   }
   
+  # =method load_yaml_string
+  #
+  #   my $meta = CPAN::Meta->load_yaml_string($yaml, \%options);
+  #
+  # This method returns a new CPAN::Meta object using the first document in the
+  # given YAML string.  In other respects it is identical to C<load_file()>.
+  #
+  # =cut
   
   sub load_yaml_string {
     my ($class, $yaml, $options) = @_;
@@ -4503,6 +4634,14 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $self;
   }
   
+  # =method load_json_string
+  #
+  #   my $meta = CPAN::Meta->load_json_string($json, \%options);
+  #
+  # This method returns a new CPAN::Meta object using the structure represented by
+  # the given JSON string.  In other respects it is identical to C<load_file()>.
+  #
+  # =cut
   
   sub load_json_string {
     my ($class, $json, $options) = @_;
@@ -4517,6 +4656,50 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $self;
   }
   
+  # =method load_string
+  #
+  #   my $meta = CPAN::Meta->load_string($string, \%options);
+  #
+  # If you don't know if a string contains YAML or JSON, this method will use
+  # L<Parse::CPAN::Meta> to guess.  In other respects it is identical to
+  # C<load_file()>.
+  #
+  # =cut
+  
+  sub load_string {
+    my ($class, $string, $options) = @_;
+    $options->{lazy_validation} = 1 unless exists $options->{lazy_validation};
+  
+    my $self;
+    eval {
+      my $struct = Parse::CPAN::Meta->load_string( $string );
+      $self = $class->_new($struct, $options);
+    };
+    croak($@) if $@;
+    return $self;
+  }
+  
+  # =method save
+  #
+  #   $meta->save($distmeta_file, \%options);
+  #
+  # Serializes the object as JSON and writes it to the given file.  The only valid
+  # option is C<version>, which defaults to '2'. On Perl 5.8.1 or later, the file
+  # is saved with UTF-8 encoding.
+  #
+  # For C<version> 2 (or higher), the filename should end in '.json'.  L<JSON::PP>
+  # is the default JSON backend. Using another JSON backend requires L<JSON> 2.5 or
+  # later and you must set the C<$ENV{PERL_JSON_BACKEND}> to a supported alternate
+  # backend like L<JSON::XS>.
+  #
+  # For C<version> less than 2, the filename should end in '.yml'.
+  # L<CPAN::Meta::Converter> is used to generate an older metadata structure, which
+  # is serialized to YAML.  CPAN::Meta::YAML is the default YAML backend.  You may
+  # set the C<$ENV{PERL_YAML_BACKEND}> to a supported alternative backend, though
+  # this is not recommended due to subtle incompatibilities between YAML parsers on
+  # CPAN.
+  #
+  # =cut
   
   sub save {
     my ($self, $file, $options) = @_;
@@ -4544,12 +4727,32 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return 1;
   }
   
+  # =method meta_spec_version
+  #
+  # This method returns the version part of the C<meta_spec> entry in the distmeta
+  # structure.  It is equivalent to:
+  #
+  #   $meta->meta_spec->{version};
+  #
+  # =cut
   
   sub meta_spec_version {
     my ($self) = @_;
     return $self->meta_spec->{version};
   }
   
+  # =method effective_prereqs
+  #
+  #   my $prereqs = $meta->effective_prereqs;
+  #
+  #   my $prereqs = $meta->effective_prereqs( \@feature_identifiers );
+  #
+  # This method returns a L<CPAN::Meta::Prereqs> object describing all the
+  # prereqs for the distribution.  If an arrayref of feature identifiers is given,
+  # the prereqs for the identified features are merged together with the
+  # distribution's core prereqs before the CPAN::Meta::Prereqs object is returned.
+  #
+  # =cut
   
   sub effective_prereqs {
     my ($self, $features) = @_;
@@ -4564,6 +4767,17 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $prereq->with_merged_prereqs(\@other);
   }
   
+  # =method should_index_file
+  #
+  #   ... if $meta->should_index_file( $filename );
+  #
+  # This method returns true if the given file should be indexed.  It decides this
+  # by checking the C<file> and C<directory> keys in the C<no_index> property of
+  # the distmeta structure.
+  #
+  # C<$filename> should be given in unix format.
+  #
+  # =cut
   
   sub should_index_file {
     my ($self, $filename) = @_;
@@ -4580,6 +4794,15 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return 1;
   }
   
+  # =method should_index_package
+  #
+  #   ... if $meta->should_index_package( $package );
+  #
+  # This method returns true if the given package should be indexed.  It decides
+  # this by checking the C<package> and C<namespace> keys in the C<no_index>
+  # property of the distmeta structure.
+  #
+  # =cut
   
   sub should_index_package {
     my ($self, $package) = @_;
@@ -4595,6 +4818,14 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return 1;
   }
   
+  # =method features
+  #
+  #   my @feature_objects = $meta->features;
+  #
+  # This method returns a list of L<CPAN::Meta::Feature> objects, one for each
+  # optional feature described by the distribution's metadata.
+  #
+  # =cut
   
   sub features {
     my ($self) = @_;
@@ -4606,6 +4837,15 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return @features;
   }
   
+  # =method feature
+  #
+  #   my $feature_object = $meta->feature( $identifier );
+  #
+  # This method returns a L<CPAN::Meta::Feature> object for the optional feature
+  # with the given identifier.  If no feature with that identifier exists, an
+  # exception will be raised.
+  #
+  # =cut
   
   sub feature {
     my ($self, $ident) = @_;
@@ -4616,6 +4856,18 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return CPAN::Meta::Feature->new($ident, $f);
   }
   
+  # =method as_struct
+  #
+  #   my $copy = $meta->as_struct( \%options );
+  #
+  # This method returns a deep copy of the object's metadata as an unblessed hash
+  # reference.  It takes an optional hashref of options.  If the hashref contains
+  # a C<version> argument, the copied metadata will be converted to the version
+  # of the specification and returned.  For example:
+  #
+  #   my $old_spec = $meta->as_struct( {version => "1.4"} );
+  #
+  # =cut
   
   sub as_struct {
     my ($self, $options) = @_;
@@ -4627,6 +4879,24 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
     return $struct;
   }
   
+  # =method as_string
+  #
+  #   my $string = $meta->as_string( \%options );
+  #
+  # This method returns a serialized copy of the object's metadata as a character
+  # string.  (The strings are B<not> UTF-8 encoded.)  It takes an optional hashref
+  # of options.  If the hashref contains a C<version> argument, the copied metadata
+  # will be converted to the version of the specification and returned.  For
+  # example:
+  #
+  #   my $string = $meta->as_string( {version => "1.4"} );
+  #
+  # For C<version> greater than or equal to 2, the string will be serialized as
+  # JSON.  For C<version> less than 2, the string will be serialized as YAML.  In
+  # both cases, the same rules are followed as in the C<save()> method for choosing
+  # a serialization backend.
+  #
+  # =cut
   
   sub as_string {
     my ($self, $options) = @_;
@@ -4671,7 +4941,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -4679,7 +4949,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 SYNOPSIS
   
@@ -4785,6 +5055,14 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   This method returns a new CPAN::Meta object using the structure represented by
   the given JSON string.  In other respects it is identical to C<load_file()>.
   
+  =head2 load_string
+  
+    my $meta = CPAN::Meta->load_string($string, \%options);
+  
+  If you don't know if a string contains YAML or JSON, this method will use
+  L<Parse::CPAN::Meta> to guess.  In other respects it is identical to
+  C<load_file()>.
+  
   =head2 save
   
     $meta->save($distmeta_file, \%options);
@@ -4877,7 +5155,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   will be converted to the version of the specification and returned.  For
   example:
   
-    my $string = $meta->as_struct( {version => "1.4"} );
+    my $string = $meta->as_string( {version => "1.4"} );
   
   For C<version> greater than or equal to 2, the string will be serialized as
   JSON.  For C<version> less than 2, the string will be serialized as YAML.  In
@@ -5066,6 +5344,10 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =item *
   
+  Chuck Adams <cja987@gmail.com>
+  
+  =item *
+  
   Cory G Watson <gphat@cpan.org>
   
   =item *
@@ -5114,7 +5396,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =item *
   
-  Olivier Mengué <dolmen@cpan.org>
+  Olivier Mengue <dolmen@cpan.org>
   
   =item *
   
@@ -5132,10 +5414,10 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   =cut
 CPAN_META
 
-$fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
+$fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_CHECK';
   package CPAN::Meta::Check;
   {
-    $CPAN::Meta::Check::VERSION = '0.007';
+    $CPAN::Meta::Check::VERSION = '0.008';
   }
   use strict;
   use warnings;
@@ -5174,16 +5456,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   sub requirements_for {
   	my ($meta, $phases, $type) = @_;
   	my $prereqs = ref($meta) eq 'CPAN::Meta' ? $meta->effective_prereqs : $meta;
-  	if (!ref $phases) {
-  		return $prereqs->requirements_for($phases, $type);
-  	}
-  	else {
-  		my $ret = CPAN::Meta::Requirements->new;
-  		for my $phase (@{ $phases }) {
-  			$ret->add_requirements($prereqs->requirements_for($phase, $type));
-  		}
-  		return $ret;
-  	}
+  	return $prereqs->merged_requirements(ref($phases) ? $phases : [ $phases ], [ $type ]);
   }
   
   sub check_requirements {
@@ -5225,7 +5498,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   
   =head1 VERSION
   
-  version 0.007
+  version 0.008
   
   =head1 SYNOPSIS
   
@@ -5237,17 +5510,19 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   
   =head1 FUNCTIONS
   
-  =head2 check_requirements($reqs, $type)
+  =head2 check_requirements($reqs, $type, $incdirs)
   
-  This function checks if all dependencies in C<$reqs> (a L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object) are met, taking into account that 'conflicts' dependencies have to be checked in reverse. It returns a hash with the modules as keys and any problems as values; the value for a successfully found module will be undef.
+  This function checks if all dependencies in C<$reqs> (a L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object) are met, taking into account that 'conflicts' dependencies have to be checked in reverse. It returns a hash with the modules as keys and any problems as values; the value for a successfully found module will be undef. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
   
   =head2 verify_dependencies($meta, $phases, $types, $incdirs)
   
-  Check all requirements in C<$meta> for phases C<$phases> and types C<$types>. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
+  Check all requirements in C<$meta> for phases C<$phases> and types C<$types>. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>. C<$meta> should be a L<CPAN::Meta::Prereqs> or L<CPAN::Meta> object.
   
-  =head2 requirements_for($meta, $phases, $types, incdirs)
+  =head2 requirements_for($meta, $phases, $types)
   
-  This function returns a unified L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object for all C<$type> requirements for C<$phases>. $phases may be either one (scalar) value or an arrayref of valid values as defined by the L<CPAN::Meta spec|CPAN::Meta::Spec>. C<$type> must be a relationship as defined by the same spec. Modules are searched for in C<@$incdirs>, defaulting to C<@INC>.
+  B<< This function is deprecated and may be removed at some point in the future, please use CPAN::Meta::Prereqs->merged_requirements instead. >>
+  
+  This function returns a unified L<CPAN::Meta::Requirements|CPAN::Meta::Requirements> object for all C<$type> requirements for C<$phases>. C<$phases> may be either one (scalar) value or an arrayref of valid values as defined by the L<CPAN::Meta spec|CPAN::Meta::Spec>. C<$type> must be a relationship as defined by the same spec. C<$meta> should be a L<CPAN::Meta::Prereqs> or L<CPAN::Meta> object.
   
   =head1 SEE ALSO
   
@@ -5273,18 +5548,36 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   =cut
 CPAN_META_CHECK
 
-$fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
+$fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_CONVERTER';
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta::Converter;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
+  # =head1 SYNOPSIS
+  #
+  #   my $struct = decode_json_file('META.json');
+  #
+  #   my $cmc = CPAN::Meta::Converter->new( $struct );
+  #
+  #   my $new_struct = $cmc->convert( version => "2" );
+  #
+  # =head1 DESCRIPTION
+  #
+  # This module converts CPAN Meta structures from one form to another.  The
+  # primary use is to convert older structures to the most modern version of
+  # the specification, but other transformations may be implemented in the
+  # future as needed.  (E.g. stripping all custom fields or stripping all
+  # optional fields.)
+  #
+  # =cut
   
   use CPAN::Meta::Validator;
   use CPAN::Meta::Requirements;
   use version 0.88 ();
   use Parse::CPAN::Meta 1.4400 ();
+  use List::Util 1.33 qw/all/;
   
   sub _dclone {
     my $ref = shift;
@@ -5336,7 +5629,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
     my $sig = __PACKAGE__ . " version " . (__PACKAGE__->VERSION || "<dev>");
   
     return $sig unless defined $gen and length $gen;
-    return $gen if $gen =~ /(, )\Q$sig/;
+    return $gen if $gen =~ /\Q$sig/;
     return "$gen, $sig";
   }
   
@@ -5364,12 +5657,13 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   sub _change_meta_spec {
     my ($element, undef, undef, $version) = @_;
-    $element->{version} = $version;
-    $element->{url} = $known_specs{$version};
-    return $element;
+    return {
+      version => $version,
+      url => $known_specs{$version},
+    };
   }
   
-  my @valid_licenses_1 = (
+  my @open_source = (
     'perl',
     'gpl',
     'apache',
@@ -5381,6 +5675,12 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
     'mit',
     'mozilla',
     'open_source',
+  );
+  
+  my %is_open_source = map {; $_ => 1 } @open_source;
+  
+  my @valid_licenses_1 = (
+    @open_source,
     'unrestricted',
     'restrictive',
     'unknown',
@@ -5397,7 +5697,9 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
     if ( $license_map_1{lc $element} ) {
       return $license_map_1{lc $element};
     }
-    return 'unknown';
+    else {
+      return 'unknown';
+    }
   }
   
   my @valid_licenses_2 = qw(
@@ -5495,12 +5797,20 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
       return "unknown";
     }
     elsif( ref $element eq 'ARRAY' ) {
-      if ( @$element == 1 ) {
-        return $license_downgrade_map{$element->[0]} || "unknown";
+      if ( @$element > 1) {
+        if ( all { $is_open_source{ $license_downgrade_map{lc $_} || 'unknown' } } @$element ) {
+          return 'open_source';
+        }
+        else {
+          return 'unknown';
+        }
+      }
+      elsif ( @$element == 1 ) {
+        return $license_downgrade_map{lc $element->[0]} || "unknown";
       }
     }
     elsif ( ! ref $element ) {
-      return $license_downgrade_map{$element} || "unknown";
+      return $license_downgrade_map{lc $element} || "unknown";
     }
     return "unknown";
   }
@@ -5624,7 +5934,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
       # XXX turn this into CPAN::Meta::Requirements with bad version hook
       # and then turn it back into a hash
       my $new_map = CPAN::Meta::Requirements->new(
-        { bad_version_hook => sub { version->new(0) } } # punt
+        { bad_version_hook => \&_bad_version_hook } # punt
       );
       while ( my ($k,$v) = each %$element ) {
         next unless _is_module_name($k);
@@ -6475,6 +6785,15 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   # Code
   #--------------------------------------------------------------------------#
   
+  # =method new
+  #
+  #   my $cmc = CPAN::Meta::Converter->new( $struct );
+  #
+  # The constructor should be passed a valid metadata structure but invalid
+  # structures are accepted.  If no meta-spec version is provided, version 1.0 will
+  # be assumed.
+  #
+  # =cut
   
   sub new {
     my ($class,$data) = @_;
@@ -6482,13 +6801,80 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
     # create an attributes hash
     my $self = {
       'data'    => $data,
-      'spec'    => $data->{'meta-spec'}{'version'} || "1.0",
+      'spec'    => _extract_spec_version($data),
     };
   
     # create the object
     return bless $self, $class;
   }
   
+  sub _extract_spec_version {
+      my ($data) = @_;
+      my $spec = $data->{'meta-spec'};
+  
+      # is meta-spec there and valid?
+      return "1.0" unless defined $spec && ref $spec eq 'HASH'; # before meta-spec?
+  
+      # does the version key look like a valid version?
+      my $v = $spec->{version};
+      if ( defined $v && $v =~ /^\d+(?:\.\d+)?$/ ) {
+          return $v if defined $v && grep { $v eq $_ } keys %known_specs; # known spec
+          return $v+0 if defined $v && grep { $v == $_ } keys %known_specs; # 2.0 => 2
+      }
+  
+      # otherwise, use heuristics: look for 1.x vs 2.0 fields
+      return "2" if exists $data->{prereqs};
+      return "1.4" if exists $data->{configure_requires};
+      return "1.2"; # when meta-spec was first defined
+  }
+  
+  # =method convert
+  #
+  #   my $new_struct = $cmc->convert( version => "2" );
+  #
+  # Returns a new hash reference with the metadata converted to a different form.
+  # C<convert> will die if any conversion/standardization still results in an
+  # invalid structure.
+  #
+  # Valid parameters include:
+  #
+  # =over
+  #
+  # =item *
+  #
+  # C<version> -- Indicates the desired specification version (e.g. "1.0", "1.1" ... "1.4", "2").
+  # Defaults to the latest version of the CPAN Meta Spec.
+  #
+  # =back
+  #
+  # Conversion proceeds through each version in turn.  For example, a version 1.2
+  # structure might be converted to 1.3 then 1.4 then finally to version 2. The
+  # conversion process attempts to clean-up simple errors and standardize data.
+  # For example, if C<author> is given as a scalar, it will converted to an array
+  # reference containing the item. (Converting a structure to its own version will
+  # also clean-up and standardize.)
+  #
+  # When data are cleaned and standardized, missing or invalid fields will be
+  # replaced with sensible defaults when possible.  This may be lossy or imprecise.
+  # For example, some badly structured META.yml files on CPAN have prerequisite
+  # modules listed as both keys and values:
+  #
+  #   requires => { 'Foo::Bar' => 'Bam::Baz' }
+  #
+  # These would be split and each converted to a prerequisite with a minimum
+  # version of zero.
+  #
+  # When some mandatory fields are missing or invalid, the conversion will attempt
+  # to provide a sensible default or will fill them with a value of 'unknown'.  For
+  # example a missing or unrecognized C<license> field will result in a C<license>
+  # field of 'unknown'.  Fields that may get an 'unknown' include:
+  #
+  # =for :list
+  # * abstract
+  # * author
+  # * license
+  #
+  # =cut
   
   sub convert {
     my ($self, %args) = @_;
@@ -6548,7 +6934,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -6556,7 +6942,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 SYNOPSIS
   
@@ -6674,15 +7060,33 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   =cut
 CPAN_META_CONVERTER
 
-$fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
+$fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_FEATURE';
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta::Feature;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
   use CPAN::Meta::Prereqs;
   
+  # =head1 DESCRIPTION
+  #
+  # A CPAN::Meta::Feature object describes an optional feature offered by a CPAN
+  # distribution and specified in the distribution's F<META.json> (or F<META.yml>)
+  # file.
+  #
+  # For the most part, this class will only be used when operating on the result of
+  # the C<feature> or C<features> methods on a L<CPAN::Meta> object.
+  #
+  # =method new
+  #
+  #   my $feature = CPAN::Meta::Feature->new( $identifier => \%spec );
+  #
+  # This returns a new Feature object.  The C<%spec> argument to the constructor
+  # should be the same as the value of the C<optional_feature> entry in the
+  # distmeta.  It must contain entries for C<description> and C<prereqs>.
+  #
+  # =cut
   
   sub new {
     my ($class, $identifier, $spec) = @_;
@@ -6696,12 +7100,28 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
     bless \%guts => $class;
   }
   
+  # =method identifier
+  #
+  # This method returns the feature's identifier.
+  #
+  # =cut
   
   sub identifier  { $_[0]{identifier}  }
   
+  # =method description
+  #
+  # This method returns the feature's long description.
+  #
+  # =cut
   
   sub description { $_[0]{description} }
   
+  # =method prereqs
+  #
+  # This method returns the feature's prerequisites as a L<CPAN::Meta::Prereqs>
+  # object.
+  #
+  # =cut
   
   sub prereqs     { $_[0]{prereqs} }
   
@@ -6713,7 +7133,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -6721,7 +7141,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 DESCRIPTION
   
@@ -6788,13 +7208,13 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   =cut
 CPAN_META_FEATURE
 
-$fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
+$fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_HISTORY';
   # vi:tw=72
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta::History;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
   1;
   
@@ -6804,7 +7224,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -6812,7 +7232,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 DESCRIPTION
   
@@ -7106,18 +7526,52 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   =cut
 CPAN_META_HISTORY
 
-$fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
+$fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_PREREQS';
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta::Prereqs;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
+  # =head1 DESCRIPTION
+  #
+  # A CPAN::Meta::Prereqs object represents the prerequisites for a CPAN
+  # distribution or one of its optional features.  Each set of prereqs is
+  # organized by phase and type, as described in L<CPAN::Meta::Prereqs>.
+  #
+  # =cut
   
   use Carp qw(confess);
   use Scalar::Util qw(blessed);
   use CPAN::Meta::Requirements 2.121;
   
+  # =method new
+  #
+  #   my $prereq = CPAN::Meta::Prereqs->new( \%prereq_spec );
+  #
+  # This method returns a new set of Prereqs.  The input should look like the
+  # contents of the C<prereqs> field described in L<CPAN::Meta::Spec>, meaning
+  # something more or less like this:
+  #
+  #   my $prereq = CPAN::Meta::Prereqs->new({
+  #     runtime => {
+  #       requires => {
+  #         'Some::Module' => '1.234',
+  #         ...,
+  #       },
+  #       ...,
+  #     },
+  #     ...,
+  #   });
+  #
+  # You can also construct an empty set of prereqs with:
+  #
+  #   my $prereqs = CPAN::Meta::Prereqs->new;
+  #
+  # This empty set of prereqs is useful for accumulating new prereqs before finally
+  # dumping the whole set into a structure or string.
+  #
+  # =cut
   
   sub __legal_phases { qw(configure build test runtime develop)   }
   sub __legal_types  { qw(requires recommends suggests conflicts) }
@@ -7153,6 +7607,19 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
     return bless \%guts => $class;
   }
   
+  # =method requirements_for
+  #
+  #   my $requirements = $prereqs->requirements_for( $phase, $type );
+  #
+  # This method returns a L<CPAN::Meta::Requirements> object for the given
+  # phase/type combination.  If no prerequisites are registered for that
+  # combination, a new CPAN::Meta::Requirements object will be returned, and it may
+  # be added to as needed.
+  #
+  # If C<$phase> or C<$type> are undefined or otherwise invalid, an exception will
+  # be raised.
+  #
+  # =cut
   
   sub requirements_for {
     my ($self, $phase, $type) = @_;
@@ -7175,6 +7642,21 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
     return $req;
   }
   
+  # =method with_merged_prereqs
+  #
+  #   my $new_prereqs = $prereqs->with_merged_prereqs( $other_prereqs );
+  #
+  #   my $new_prereqs = $prereqs->with_merged_prereqs( \@other_prereqs );
+  #
+  # This method returns a new CPAN::Meta::Prereqs objects in which all the
+  # other prerequisites given are merged into the current set.  This is primarily
+  # provided for combining a distribution's core prereqs with the prereqs of one of
+  # its optional features.
+  #
+  # The new prereqs object has no ties to the originals, and altering it further
+  # will not alter them.
+  #
+  # =cut
   
   sub with_merged_prereqs {
     my ($self, $other) = @_;
@@ -7205,6 +7687,56 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
     return (ref $self)->new(\%new_arg);
   }
   
+  # =method merged_requirements
+  #
+  #     my $new_reqs = $prereqs->merged_requirements( \@phases, \@types );
+  #     my $new_reqs = $prereqs->merged_requirements( \@phases );
+  #     my $new_reqs = $preerqs->merged_requirements();
+  #
+  # This method joins together all requirements across a number of phases
+  # and types into a new L<CPAN::Meta::Requirements> object.  If arguments
+  # are omitted, it defaults to "runtime", "build" and "test" for phases
+  # and "requires" and "recommends" for types.
+  #
+  # =cut
+  
+  sub merged_requirements {
+    my ($self, $phases, $types) = @_;
+    $phases = [qw/runtime build test/] unless defined $phases;
+    $types = [qw/requires recommends/] unless defined $types;
+  
+    confess "merged_requirements phases argument must be an arrayref"
+      unless ref $phases eq 'ARRAY';
+    confess "merged_requirements types argument must be an arrayref"
+      unless ref $types eq 'ARRAY';
+  
+    my $req = CPAN::Meta::Requirements->new;
+  
+    for my $phase ( @$phases ) {
+      unless ($phase =~ /\Ax_/i or grep { $phase eq $_ } $self->__legal_phases) {
+          confess "requested requirements for unknown phase: $phase";
+      }
+      for my $type ( @$types ) {
+        unless ($type =~ /\Ax_/i or grep { $type eq $_ } $self->__legal_types) {
+            confess "requested requirements for unknown type: $type";
+        }
+        $req->add_requirements( $self->requirements_for($phase, $type) );
+      }
+    }
+  
+    $req->finalize if $self->is_finalized;
+  
+    return $req;
+  }
+  
+  
+  # =method as_string_hash
+  #
+  # This method returns a hashref containing structures suitable for dumping into a
+  # distmeta data structure.  It is made up of hashes and strings, only; there will
+  # be no Prereqs, CPAN::Meta::Requirements, or C<version> objects inside it.
+  #
+  # =cut
   
   sub as_string_hash {
     my ($self) = @_;
@@ -7223,9 +7755,22 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
     return \%hash;
   }
   
+  # =method is_finalized
+  #
+  # This method returns true if the set of prereqs has been marked "finalized," and
+  # cannot be altered.
+  #
+  # =cut
   
   sub is_finalized { $_[0]{finalized} }
   
+  # =method finalize
+  #
+  # Calling C<finalize> on a Prereqs object will close it for further modification.
+  # Attempting to make any changes that would actually alter the prereqs will
+  # result in an exception being thrown.
+  #
+  # =cut
   
   sub finalize {
     my ($self) = @_;
@@ -7237,6 +7782,16 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
     }
   }
   
+  # =method clone
+  #
+  #   my $cloned_prereqs = $prereqs->clone;
+  #
+  # This method returns a Prereqs object that is identical to the original object,
+  # but can be altered without affecting the original object.  Finalization does
+  # not survive cloning, meaning that you may clone a finalized set of prereqs and
+  # then modify the clone.
+  #
+  # =cut
   
   sub clone {
     my ($self) = @_;
@@ -7252,7 +7807,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -7260,7 +7815,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 DESCRIPTION
   
@@ -7322,6 +7877,17 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   The new prereqs object has no ties to the originals, and altering it further
   will not alter them.
   
+  =head2 merged_requirements
+  
+      my $new_reqs = $prereqs->merged_requirements( \@phases, \@types );
+      my $new_reqs = $prereqs->merged_requirements( \@phases );
+      my $new_reqs = $preerqs->merged_requirements();
+  
+  This method joins together all requirements across a number of phases
+  and types into a new L<CPAN::Meta::Requirements> object.  If arguments
+  are omitted, it defaults to "runtime", "build" and "test" for phases
+  and "requires" and "recommends" for types.
+  
   =head2 as_string_hash
   
   This method returns a hashref containing structures suitable for dumping into a
@@ -7381,11 +7947,11 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   =cut
 CPAN_META_PREREQS
 
-$fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
+$fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_REQUIREMENTS';
   use strict;
   use warnings;
   package CPAN::Meta::Requirements;
-  our $VERSION = '2.123'; # VERSION
+  our $VERSION = '2.125'; # VERSION
   # ABSTRACT: a set of version requirements for a CPAN dist
   
   
@@ -7828,7 +8394,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   
   =head1 VERSION
   
-  version 2.123
+  version 2.125
   
   =head1 SYNOPSIS
   
@@ -8078,7 +8644,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<https://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta-Requirements>.
+  at L<https://github.com/dagolden/CPAN-Meta-Requirements/issues>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -8086,9 +8652,9 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<https://github.com/dagolden/cpan-meta-requirements>
+  L<https://github.com/dagolden/CPAN-Meta-Requirements>
   
-    git clone git://github.com/dagolden/cpan-meta-requirements.git
+    git clone https://github.com/dagolden/CPAN-Meta-Requirements.git
   
   =head1 AUTHORS
   
@@ -8114,7 +8680,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   =cut
 CPAN_META_REQUIREMENTS
 
-$fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
+$fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_SPEC';
   # XXX RULES FOR PATCHING THIS FILE XXX
   # Patches that fix typos or formatting are acceptable.  Patches
   # that change semantics are not acceptable without prior approval
@@ -8124,7 +8690,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   use strict;
   use warnings;
   package CPAN::Meta::Spec;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
   1;
   
@@ -8137,7 +8703,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -8145,7 +8711,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 SYNOPSIS
   
@@ -8199,7 +8765,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
       keywords => [ qw/ toolchain cpan dual-life / ],
       'meta-spec' => {
         version => '2',
-        url     => 'http://search.cpan.org/perldoc?CPAN::Meta::Spec',
+        url     => 'https://metacpan.org/pod/CPAN::Meta::Spec',
       },
       generated_by => 'Module::Build version 0.36',
     };
@@ -8432,7 +8998,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
     license => [ 'perl_5' ]
   
-    license => [ 'apache_2', 'mozilla_1_0' ]
+    license => [ 'apache_2_0', 'mozilla_1_0' ]
   
   (Spec 2) [required] {List of one or more License Strings}
   
@@ -8512,6 +9078,20 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   the given version.  This is strictly for human-consumption and should
   not impact the interpretation of the document.
   
+  For the version 2 spec, either of these are recommended:
+  
+  =over 4
+  
+  =item *
+  
+  C<https://metacpan.org/pod/CPAN::Meta::Spec>
+  
+  =item *
+  
+  C<http://search.cpan.org/perldoc?CPAN::Meta::Spec>
+  
+  =back
+  
   =back
   
   =head3 name
@@ -8525,7 +9105,8 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   This field is the name of the distribution.  This is often created by
   taking the "main package" in the distribution and changing C<::> to
   C<->, but the name may be completely unrelated to the packages within
-  the distribution.  C.f. L<http://search.cpan.org/dist/libwww-perl/>.
+  the distribution.  For example, L<LWP::UserAgent> is distributed as part
+  of the distribution name "libwww-perl".
   
   =head3 release_status
   
@@ -8779,8 +9360,8 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   This describes all packages provided by this distribution.  This
   information is used by distribution and automation mechanisms like
-  PAUSE, CPAN, and search.cpan.org to build indexes saying in which
-  distribution various packages can be found.
+  PAUSE, CPAN, metacpan.org and search.cpan.org to build indexes saying in
+  which distribution various packages can be found.
   
   The keys of C<provides> are package names that can be found within
   the distribution.  If a package name key is provided, it must
@@ -9207,21 +9788,41 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =head1 SEE ALSO
   
+  =over 4
+  
+  =item *
+  
   CPAN, L<http://www.cpan.org/>
   
-  CPAN.pm, L<http://search.cpan.org/dist/CPAN/>
-  
-  CPANPLUS, L<http://search.cpan.org/dist/CPANPLUS/>
-  
-  ExtUtils::MakeMaker, L<http://search.cpan.org/dist/ExtUtils-MakeMaker/>
-  
-  Module::Build, L<http://search.cpan.org/dist/Module-Build/>
-  
-  Module::Install, L<http://search.cpan.org/dist/Module-Install/>
+  =item *
   
   JSON, L<http://json.org/>
   
+  =item *
+  
   YAML, L<http://www.yaml.org/>
+  
+  =item *
+  
+  L<CPAN>
+  
+  =item *
+  
+  L<CPANPLUS>
+  
+  =item *
+  
+  L<ExtUtils::MakeMaker>
+  
+  =item *
+  
+  L<Module::Build>
+  
+  =item *
+  
+  L<Module::Install>
+  
+  =back
   
   =head1 HISTORY
   
@@ -9260,13 +9861,31 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   =cut
 CPAN_META_SPEC
 
-$fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
+$fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_VALIDATOR';
   use 5.006;
   use strict;
   use warnings;
   package CPAN::Meta::Validator;
-  our $VERSION = '2.132510'; # VERSION
+  our $VERSION = '2.140640'; # VERSION
   
+  # =head1 SYNOPSIS
+  #
+  #   my $struct = decode_json_file('META.json');
+  #
+  #   my $cmv = CPAN::Meta::Validator->new( $struct );
+  #
+  #   unless ( $cmv->is_valid ) {
+  #     my $msg = "Invalid META structure.  Errors found:\n";
+  #     $msg .= join( "\n", $cmv->errors );
+  #     die $msg;
+  #   }
+  #
+  # =head1 DESCRIPTION
+  #
+  # This module validates a CPAN Meta structure against the version of the
+  # the specification claimed in the C<meta-spec> field of the structure.
+  #
+  # =cut
   
   #--------------------------------------------------------------------------#
   # This code copied and adapted from Test::CPAN::Meta
@@ -9341,10 +9960,10 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
     '2' => {
       # REQUIRED
       'abstract'            => { mandatory => 1, value => \&string  },
-      'author'              => { mandatory => 1, lazylist => { value => \&string } },
+      'author'              => { mandatory => 1, list => { value => \&string } },
       'dynamic_config'      => { mandatory => 1, value => \&boolean },
       'generated_by'        => { mandatory => 1, value => \&string  },
-      'license'             => { mandatory => 1, lazylist => { value => \&license } },
+      'license'             => { mandatory => 1, list => { value => \&license } },
       'meta-spec' => {
         mandatory => 1,
         'map' => {
@@ -9359,7 +9978,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
       # OPTIONAL
       'description' => { value => \&string },
-      'keywords'    => { lazylist => { value => \&string } },
+      'keywords'    => { list => { value => \&string } },
       'no_index'    => $no_index_2,
       'optional_features'   => {
         'map'       => {
@@ -9388,7 +10007,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
       },
       'resources'   => {
         'map'       => {
-          license    => { lazylist => { value => \&url } },
+          license    => { list => { value => \&url } },
           homepage   => { value => \&url },
           bugtracker => {
             'map' => {
@@ -9682,6 +10301,13 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   # Code
   #--------------------------------------------------------------------------#
   
+  # =method new
+  #
+  #   my $cmv = CPAN::Meta::Validator->new( $struct )
+  #
+  # The constructor must be passed a metadata structure.
+  #
+  # =cut
   
   sub new {
     my ($class,$data) = @_;
@@ -9689,7 +10315,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
     # create an attributes hash
     my $self = {
       'data'    => $data,
-      'spec'    => $data->{'meta-spec'}{'version'} || "1.0",
+      'spec'    => eval { $data->{'meta-spec'}{'version'} } || "1.0",
       'errors'  => undef,
     };
   
@@ -9697,6 +10323,16 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
     return bless $self, $class;
   }
   
+  # =method is_valid
+  #
+  #   if ( $cmv->is_valid ) {
+  #     ...
+  #   }
+  #
+  # Returns a boolean value indicating whether the metadata provided
+  # is valid.
+  #
+  # =cut
   
   sub is_valid {
       my $self = shift;
@@ -9706,6 +10342,13 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
       return ! $self->errors;
   }
   
+  # =method errors
+  #
+  #   warn( join "\n", $cmv->errors );
+  #
+  # Returns a list of errors seen during validation.
+  #
+  # =cut
   
   sub errors {
       my $self = shift;
@@ -9713,9 +10356,34 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
       return @{$self->{errors}};
   }
   
+  # =begin :internals
+  #
+  # =head2 Check Methods
+  #
+  # =over
+  #
+  # =item *
+  #
+  # check_map($spec,$data)
+  #
+  # Checks whether a map (or hash) part of the data structure conforms to the
+  # appropriate specification definition.
+  #
+  # =item *
+  #
+  # check_list($spec,$data)
+  #
+  # Checks whether a list (or array) part of the data structure conforms to
+  # the appropriate specification definition.
+  #
+  # =item *
+  #
+  # =back
+  #
+  # =cut
   
   my $spec_error = "Missing validation action in specification. "
-    . "Must be one of 'map', 'list', 'lazylist', or 'value'";
+    . "Must be one of 'map', 'list', or 'value'";
   
   sub check_map {
       my ($self,$spec,$data) = @_;
@@ -9747,8 +10415,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
                   $self->check_map($spec->{$key}{'map'},$data->{$key});
               } elsif($spec->{$key}{'list'}) {
                   $self->check_list($spec->{$key}{'list'},$data->{$key});
-              } elsif($spec->{$key}{'lazylist'}) {
-                  $self->check_lazylist($spec->{$key}{'lazylist'},$data->{$key});
               } else {
                   $self->_error( "$spec_error for '$key'" );
               }
@@ -9761,8 +10427,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
                   $self->check_map($spec->{':key'}{'map'},$data->{$key});
               } elsif($spec->{':key'}{'list'}) {
                   $self->check_list($spec->{':key'}{'list'},$data->{$key});
-              } elsif($spec->{':key'}{'lazylist'}) {
-                  $self->check_lazylist($spec->{':key'}{'lazylist'},$data->{$key});
               } else {
                   $self->_error( "$spec_error for ':key'" );
               }
@@ -9773,17 +10437,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
           }
           pop @{$self->{stack}};
       }
-  }
-  
-  # if it's a string, make it into a list and check the list
-  sub check_lazylist {
-      my ($self,$spec,$data) = @_;
-  
-      if ( defined $data && ! ref($data) ) {
-        $data = [ $data ];
-      }
-  
-      $self->check_list($spec,$data);
   }
   
   sub check_list {
@@ -9808,8 +10461,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
               $self->check_map($spec->{'map'},$value);
           } elsif(defined $spec->{'list'}) {
               $self->check_list($spec->{'list'},$value);
-          } elsif(defined $spec->{'lazylist'}) {
-              $self->check_lazylist($spec->{'lazylist'},$value);
           } elsif ($spec->{':key'}) {
               $self->check_map($spec,$value);
           } else {
@@ -9819,6 +10470,113 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
       }
   }
   
+  # =head2 Validator Methods
+  #
+  # =over
+  #
+  # =item *
+  #
+  # header($self,$key,$value)
+  #
+  # Validates that the header is valid.
+  #
+  # Note: No longer used as we now read the data structure, not the file.
+  #
+  # =item *
+  #
+  # url($self,$key,$value)
+  #
+  # Validates that a given value is in an acceptable URL format
+  #
+  # =item *
+  #
+  # urlspec($self,$key,$value)
+  #
+  # Validates that the URL to a META specification is a known one.
+  #
+  # =item *
+  #
+  # string_or_undef($self,$key,$value)
+  #
+  # Validates that the value is either a string or an undef value. Bit of a
+  # catchall function for parts of the data structure that are completely user
+  # defined.
+  #
+  # =item *
+  #
+  # string($self,$key,$value)
+  #
+  # Validates that a string exists for the given key.
+  #
+  # =item *
+  #
+  # file($self,$key,$value)
+  #
+  # Validate that a file is passed for the given key. This may be made more
+  # thorough in the future. For now it acts like \&string.
+  #
+  # =item *
+  #
+  # exversion($self,$key,$value)
+  #
+  # Validates a list of versions, e.g. '<= 5, >=2, ==3, !=4, >1, <6, 0'.
+  #
+  # =item *
+  #
+  # version($self,$key,$value)
+  #
+  # Validates a single version string. Versions of the type '5.8.8' and '0.00_00'
+  # are both valid. A leading 'v' like 'v1.2.3' is also valid.
+  #
+  # =item *
+  #
+  # boolean($self,$key,$value)
+  #
+  # Validates for a boolean value. Currently these values are '1', '0', 'true',
+  # 'false', however the latter 2 may be removed.
+  #
+  # =item *
+  #
+  # license($self,$key,$value)
+  #
+  # Validates that a value is given for the license. Returns 1 if an known license
+  # type, or 2 if a value is given but the license type is not a recommended one.
+  #
+  # =item *
+  #
+  # custom_1($self,$key,$value)
+  #
+  # Validates that the given key is in CamelCase, to indicate a user defined
+  # keyword and only has characters in the class [-_a-zA-Z].  In version 1.X
+  # of the spec, this was only explicitly stated for 'resources'.
+  #
+  # =item *
+  #
+  # custom_2($self,$key,$value)
+  #
+  # Validates that the given key begins with 'x_' or 'X_', to indicate a user
+  # defined keyword and only has characters in the class [-_a-zA-Z]
+  #
+  # =item *
+  #
+  # identifier($self,$key,$value)
+  #
+  # Validates that key is in an acceptable format for the META specification,
+  # for an identifier, i.e. any that matches the regular expression
+  # qr/[a-z][a-z_]/i.
+  #
+  # =item *
+  #
+  # module($self,$key,$value)
+  #
+  # Validates that a given key is in an acceptable module name format, e.g.
+  # 'Test::CPAN::Meta::Version'.
+  #
+  # =back
+  #
+  # =end :internals
+  #
+  # =cut
   
   sub header {
       my ($self,$key,$value) = @_;
@@ -10095,7 +10853,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -10103,7 +10861,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
   =head1 VERSION
   
-  version 2.132510
+  version 2.140640
   
   =head1 SYNOPSIS
   
@@ -10166,10 +10924,6 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   the appropriate specification definition.
   
   =item *
-  
-  check_lazylist($spec,$data)
-  
-  Checks whether a list conforms, but converts strings to a single-element list
   
   =back
   
@@ -10279,7 +11033,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
   =end :internals
   
-  =for Pod::Coverage anything boolean check_lazylist check_list custom_1 custom_2 exversion file
+  =for Pod::Coverage anything boolean check_list custom_1 custom_2 exversion file
   identifier license module phase relation release_status string string_or_undef
   url urlspec version header check_map
   
@@ -10316,650 +11070,883 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   =cut
 CPAN_META_VALIDATOR
 
-$fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
-  package CPAN::Meta::YAML;
-  {
-    $CPAN::Meta::YAML::VERSION = '0.008';
-  }
-  
+$fatpacked{"CPAN/Meta/YAML.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_YAML';
+  use 5.008001; # sane UTF-8 support
   use strict;
-  
-  # UTF Support?
-  sub HAVE_UTF8 () { $] >= 5.007003 }
+  use warnings;
+  package CPAN::Meta::YAML;
+  $CPAN::Meta::YAML::VERSION = '0.012';
   BEGIN {
-  	if ( HAVE_UTF8 ) {
-  		# The string eval helps hide this from Test::MinimumVersion
-  		eval "require utf8;";
-  		die "Failed to load UTF-8 support" if $@;
-  	}
+    $CPAN::Meta::YAML::AUTHORITY = 'cpan:ADAMK';
+  }
+  # git description: v1.60-1-g1c16a0a
+  ; # original $VERSION removed by Doppelgaenger
+  # XXX-INGY is 5.8.1 too old/broken for utf8?
+  # XXX-XDG Lancaster consensus was that it was sufficient until
+  # proven otherwise
   
-  	# Class structure
-  	require 5.004;
-  	require Exporter;
-  	require Carp;
-  	@CPAN::Meta::YAML::ISA       = qw{ Exporter  };
-  	@CPAN::Meta::YAML::EXPORT    = qw{ Load Dump };
-  	@CPAN::Meta::YAML::EXPORT_OK = qw{ LoadFile DumpFile freeze thaw };
   
-  	# Error storage
-  	$CPAN::Meta::YAML::errstr    = '';
+  #####################################################################
+  # The CPAN::Meta::YAML API.
+  #
+  # These are the currently documented API functions/methods and
+  # exports:
+  
+  use Exporter;
+  our @ISA       = qw{ Exporter  };
+  our @EXPORT    = qw{ Load Dump };
+  our @EXPORT_OK = qw{ LoadFile DumpFile freeze thaw };
+  
+  ###
+  # Functional/Export API:
+  
+  sub Dump {
+      return CPAN::Meta::YAML->new(@_)->_dump_string;
   }
   
-  # The character class of all characters we need to escape
-  # NOTE: Inlined, since it's only used once
-  # my $RE_ESCAPE = '[\\x00-\\x08\\x0b-\\x0d\\x0e-\\x1f\"\n]';
+  # XXX-INGY Returning last document seems a bad behavior.
+  # XXX-XDG I think first would seem more natural, but I don't know
+  # that it's worth changing now
+  sub Load {
+      my $self = CPAN::Meta::YAML->_load_string(@_);
+      if ( wantarray ) {
+          return @$self;
+      } else {
+          # To match YAML.pm, return the last document
+          return $self->[-1];
+      }
+  }
+  
+  # XXX-INGY Do we really need freeze and thaw?
+  # XXX-XDG I don't think so.  I'd support deprecating them.
+  BEGIN {
+      *freeze = \&Dump;
+      *thaw   = \&Load;
+  }
+  
+  sub DumpFile {
+      my $file = shift;
+      return CPAN::Meta::YAML->new(@_)->_dump_file($file);
+  }
+  
+  sub LoadFile {
+      my $file = shift;
+      my $self = CPAN::Meta::YAML->_load_file($file);
+      if ( wantarray ) {
+          return @$self;
+      } else {
+          # Return only the last document to match YAML.pm,
+          return $self->[-1];
+      }
+  }
+  
+  
+  ###
+  # Object Oriented API:
+  
+  # Create an empty CPAN::Meta::YAML object
+  # XXX-INGY Why do we use ARRAY object?
+  # NOTE: I get it now, but I think it's confusing and not needed.
+  # Will change it on a branch later, for review.
+  #
+  # XXX-XDG I don't support changing it yet.  It's a very well-documented
+  # "API" of CPAN::Meta::YAML.  I'd support deprecating it, but Adam suggested
+  # we not change it until YAML.pm's own OO API is established so that
+  # users only have one API change to digest, not two
+  sub new {
+      my $class = shift;
+      bless [ @_ ], $class;
+  }
+  
+  # XXX-INGY It probably doesn't matter, and it's probably too late to
+  # change, but 'read/write' are the wrong names. Read and Write
+  # are actions that take data from storage to memory
+  # characters/strings. These take the data to/from storage to native
+  # Perl objects, which the terms dump and load are meant. As long as
+  # this is a legacy quirk to CPAN::Meta::YAML it's ok, but I'd prefer not
+  # to add new {read,write}_* methods to this API.
+  
+  sub read_string {
+      my $self = shift;
+      $self->_load_string(@_);
+  }
+  
+  sub write_string {
+      my $self = shift;
+      $self->_dump_string(@_);
+  }
+  
+  sub read {
+      my $self = shift;
+      $self->_load_file(@_);
+  }
+  
+  sub write {
+      my $self = shift;
+      $self->_dump_file(@_);
+  }
+  
+  
+  
+  
+  #####################################################################
+  # Constants
   
   # Printed form of the unprintable characters in the lowest range
   # of ASCII characters, listed by ASCII ordinal position.
   my @UNPRINTABLE = qw(
-  	z    x01  x02  x03  x04  x05  x06  a
-  	x08  t    n    v    f    r    x0e  x0f
-  	x10  x11  x12  x13  x14  x15  x16  x17
-  	x18  x19  x1a  e    x1c  x1d  x1e  x1f
+      0    x01  x02  x03  x04  x05  x06  a
+      b    t    n    v    f    r    x0E  x0F
+      x10  x11  x12  x13  x14  x15  x16  x17
+      x18  x19  x1A  e    x1C  x1D  x1E  x1F
   );
   
   # Printable characters for escapes
   my %UNESCAPES = (
-  	z => "\x00", a => "\x07", t    => "\x09",
-  	n => "\x0a", v => "\x0b", f    => "\x0c",
-  	r => "\x0d", e => "\x1b", '\\' => '\\',
+      0 => "\x00", z => "\x00", N    => "\x85",
+      a => "\x07", b => "\x08", t    => "\x09",
+      n => "\x0a", v => "\x0b", f    => "\x0c",
+      r => "\x0d", e => "\x1b", '\\' => '\\',
   );
   
-  # Special magic boolean words
+  # XXX-INGY
+  # I(ngy) need to decide if these values should be quoted in
+  # CPAN::Meta::YAML or not. Probably yes.
+  
+  # These 3 values have special meaning when unquoted and using the
+  # default YAML schema. They need quotes if they are strings.
   my %QUOTE = map { $_ => 1 } qw{
-  	null Null NULL
-  	y Y yes Yes YES n N no No NO
-  	true True TRUE false False FALSE
-  	on On ON off Off OFF
+      null true false
   };
+  
+  # The commented out form is simpler, but overloaded the Perl regex
+  # engine due to recursion and backtracking problems on strings
+  # larger than 32,000ish characters. Keep it for reference purposes.
+  # qr/\"((?:\\.|[^\"])*)\"/
+  my $re_capture_double_quoted = qr/\"([^\\"]*(?:\\.[^\\"]*)*)\"/;
+  my $re_capture_single_quoted = qr/\'([^\']*(?:\'\'[^\']*)*)\'/;
+  # unquoted re gets trailing space that needs to be stripped
+  my $re_capture_unquoted_key  = qr/([^:]+(?::+\S[^:]*)*)(?=\s*\:(?:\s+|$))/;
+  my $re_trailing_comment      = qr/(?:\s+\#.*)?/;
+  my $re_key_value_separator   = qr/\s*:(?:\s+(?:\#.*)?|$)/;
   
   
   
   
   
   #####################################################################
-  # Implementation
+  # CPAN::Meta::YAML Implementation.
+  #
+  # These are the private methods that do all the work. They may change
+  # at any time.
   
-  # Create an empty CPAN::Meta::YAML object
-  sub new {
-  	my $class = shift;
-  	bless [ @_ ], $class;
-  }
+  
+  ###
+  # Loader functions:
   
   # Create an object from a file
-  sub read {
-  	my $class = ref $_[0] ? ref shift : shift;
+  sub _load_file {
+      my $class = ref $_[0] ? ref shift : shift;
   
-  	# Check the file
-  	my $file = shift or return $class->_error( 'You did not specify a file name' );
-  	return $class->_error( "File '$file' does not exist" )              unless -e $file;
-  	return $class->_error( "'$file' is a directory, not a file" )       unless -f _;
-  	return $class->_error( "Insufficient permissions to read '$file'" ) unless -r _;
+      # Check the file
+      my $file = shift or $class->_error( 'You did not specify a file name' );
+      $class->_error( "File '$file' does not exist" )
+          unless -e $file;
+      $class->_error( "'$file' is a directory, not a file" )
+          unless -f _;
+      $class->_error( "Insufficient permissions to read '$file'" )
+          unless -r _;
   
-  	# Slurp in the file
-  	local $/ = undef;
-  	local *CFG;
-  	unless ( open(CFG, $file) ) {
-  		return $class->_error("Failed to open file '$file': $!");
-  	}
-  	my $contents = <CFG>;
-  	unless ( close(CFG) ) {
-  		return $class->_error("Failed to close file '$file': $!");
-  	}
+      # Open unbuffered with strict UTF-8 decoding and no translation layers
+      open( my $fh, "<:unix:encoding(UTF-8)", $file );
+      unless ( $fh ) {
+          $class->_error("Failed to open file '$file': $!");
+      }
   
-  	$class->read_string( $contents );
+      # flock if available (or warn if not possible for OS-specific reasons)
+      if ( _can_flock() ) {
+          flock( $fh, Fcntl::LOCK_SH() )
+              or warn "Couldn't lock '$file' for reading: $!";
+      }
+  
+      # slurp the contents
+      my $contents = eval {
+          use warnings FATAL => 'utf8';
+          local $/;
+          <$fh>
+      };
+      if ( my $err = $@ ) {
+          $class->_error("Error reading from file '$file': $err");
+      }
+  
+      # close the file (release the lock)
+      unless ( close $fh ) {
+          $class->_error("Failed to close file '$file': $!");
+      }
+  
+      $class->_load_string( $contents );
   }
   
   # Create an object from a string
-  sub read_string {
-  	my $class  = ref $_[0] ? ref shift : shift;
-  	my $self   = bless [], $class;
-  	my $string = $_[0];
-  	eval {
-  		unless ( defined $string ) {
-  			die \"Did not provide a string to load";
-  		}
+  sub _load_string {
+      my $class  = ref $_[0] ? ref shift : shift;
+      my $self   = bless [], $class;
+      my $string = $_[0];
+      eval {
+          unless ( defined $string ) {
+              die \"Did not provide a string to load";
+          }
   
-  		# Byte order marks
-  		# NOTE: Keeping this here to educate maintainers
-  		# my %BOM = (
-  		#     "\357\273\277" => 'UTF-8',
-  		#     "\376\377"     => 'UTF-16BE',
-  		#     "\377\376"     => 'UTF-16LE',
-  		#     "\377\376\0\0" => 'UTF-32LE'
-  		#     "\0\0\376\377" => 'UTF-32BE',
-  		# );
-  		if ( $string =~ /^(?:\376\377|\377\376|\377\376\0\0|\0\0\376\377)/ ) {
-  			die \"Stream has a non UTF-8 BOM";
-  		} else {
-  			# Strip UTF-8 bom if found, we'll just ignore it
-  			$string =~ s/^\357\273\277//;
-  		}
+          # Check if Perl has it marked as characters, but it's internally
+          # inconsistent.  E.g. maybe latin1 got read on a :utf8 layer
+          if ( utf8::is_utf8($string) && ! utf8::valid($string) ) {
+              die \<<'...';
+  Read an invalid UTF-8 string (maybe mixed UTF-8 and 8-bit character set).
+  Did you decode with lax ":utf8" instead of strict ":encoding(UTF-8)"?
+  ...
+          }
   
-  		# Try to decode as utf8
-  		utf8::decode($string) if HAVE_UTF8;
+          # Ensure Unicode character semantics, even for 0x80-0xff
+          utf8::upgrade($string);
   
-  		# Check for some special cases
-  		return $self unless length $string;
-  		unless ( $string =~ /[\012\015]+\z/ ) {
-  			die \"Stream does not end with newline character";
-  		}
+          # Check for and strip any leading UTF-8 BOM
+          $string =~ s/^\x{FEFF}//;
   
-  		# Split the file into lines
-  		my @lines = grep { ! /^\s*(?:\#.*)?\z/ }
-  			    split /(?:\015{1,2}\012|\015|\012)/, $string;
+          # Check for some special cases
+          return $self unless length $string;
   
-  		# Strip the initial YAML header
-  		@lines and $lines[0] =~ /^\%YAML[: ][\d\.]+.*\z/ and shift @lines;
+          # Split the file into lines
+          my @lines = grep { ! /^\s*(?:\#.*)?\z/ }
+                  split /(?:\015{1,2}\012|\015|\012)/, $string;
   
-  		# A nibbling parser
-  		while ( @lines ) {
-  			# Do we have a document header?
-  			if ( $lines[0] =~ /^---\s*(?:(.+)\s*)?\z/ ) {
-  				# Handle scalar documents
-  				shift @lines;
-  				if ( defined $1 and $1 !~ /^(?:\#.+|\%YAML[: ][\d\.]+)\z/ ) {
-  					push @$self, $self->_read_scalar( "$1", [ undef ], \@lines );
-  					next;
-  				}
-  			}
+          # Strip the initial YAML header
+          @lines and $lines[0] =~ /^\%YAML[: ][\d\.]+.*\z/ and shift @lines;
   
-  			if ( ! @lines or $lines[0] =~ /^(?:---|\.\.\.)/ ) {
-  				# A naked document
-  				push @$self, undef;
-  				while ( @lines and $lines[0] !~ /^---/ ) {
-  					shift @lines;
-  				}
+          # A nibbling parser
+          my $in_document = 0;
+          while ( @lines ) {
+              # Do we have a document header?
+              if ( $lines[0] =~ /^---\s*(?:(.+)\s*)?\z/ ) {
+                  # Handle scalar documents
+                  shift @lines;
+                  if ( defined $1 and $1 !~ /^(?:\#.+|\%YAML[: ][\d\.]+)\z/ ) {
+                      push @$self,
+                          $self->_load_scalar( "$1", [ undef ], \@lines );
+                      next;
+                  }
+                  $in_document = 1;
+              }
   
-  			} elsif ( $lines[0] =~ /^\s*\-/ ) {
-  				# An array at the root
-  				my $document = [ ];
-  				push @$self, $document;
-  				$self->_read_array( $document, [ 0 ], \@lines );
+              if ( ! @lines or $lines[0] =~ /^(?:---|\.\.\.)/ ) {
+                  # A naked document
+                  push @$self, undef;
+                  while ( @lines and $lines[0] !~ /^---/ ) {
+                      shift @lines;
+                  }
+                  $in_document = 0;
   
-  			} elsif ( $lines[0] =~ /^(\s*)\S/ ) {
-  				# A hash at the root
-  				my $document = { };
-  				push @$self, $document;
-  				$self->_read_hash( $document, [ length($1) ], \@lines );
+              # XXX The final '-+$' is to look for -- which ends up being an
+              # error later.
+              } elsif ( ! $in_document && @$self ) {
+                  # only the first document can be explicit
+                  die \"CPAN::Meta::YAML failed to classify the line '$lines[0]'";
+              } elsif ( $lines[0] =~ /^\s*\-(?:\s|$|-+$)/ ) {
+                  # An array at the root
+                  my $document = [ ];
+                  push @$self, $document;
+                  $self->_load_array( $document, [ 0 ], \@lines );
   
-  			} else {
-  				die \"CPAN::Meta::YAML failed to classify the line '$lines[0]'";
-  			}
-  		}
-  	};
-  	if ( ref $@ eq 'SCALAR' ) {
-  		return $self->_error(${$@});
-  	} elsif ( $@ ) {
-  		require Carp;
-  		Carp::croak($@);
-  	}
+              } elsif ( $lines[0] =~ /^(\s*)\S/ ) {
+                  # A hash at the root
+                  my $document = { };
+                  push @$self, $document;
+                  $self->_load_hash( $document, [ length($1) ], \@lines );
   
-  	return $self;
+              } else {
+                  # Shouldn't get here.  @lines have whitespace-only lines
+                  # stripped, and previous match is a line with any
+                  # non-whitespace.  So this clause should only be reachable via
+                  # a perlbug where \s is not symmetric with \S
+  
+                  # uncoverable statement
+                  die \"CPAN::Meta::YAML failed to classify the line '$lines[0]'";
+              }
+          }
+      };
+      if ( ref $@ eq 'SCALAR' ) {
+          $self->_error(${$@});
+      } elsif ( $@ ) {
+          $self->_error($@);
+      }
+  
+      return $self;
   }
   
-  # Deparse a scalar string to the actual scalar
-  sub _read_scalar {
-  	my ($self, $string, $indent, $lines) = @_;
-  
-  	# Trim trailing whitespace
-  	$string =~ s/\s*\z//;
-  
-  	# Explitic null/undef
-  	return undef if $string eq '~';
-  
-  	# Single quote
-  	if ( $string =~ /^\'(.*?)\'(?:\s+\#.*)?\z/ ) {
-  		return '' unless defined $1;
-  		$string = $1;
-  		$string =~ s/\'\'/\'/g;
-  		return $string;
-  	}
-  
-  	# Double quote.
-  	# The commented out form is simpler, but overloaded the Perl regex
-  	# engine due to recursion and backtracking problems on strings
-  	# larger than 32,000ish characters. Keep it for reference purposes.
-  	# if ( $string =~ /^\"((?:\\.|[^\"])*)\"\z/ ) {
-  	if ( $string =~ /^\"([^\\"]*(?:\\.[^\\"]*)*)\"(?:\s+\#.*)?\z/ ) {
-  		# Reusing the variable is a little ugly,
-  		# but avoids a new variable and a string copy.
-  		$string = $1;
-  		$string =~ s/\\"/"/g;
-  		$string =~ s/\\([never\\fartz]|x([0-9a-fA-F]{2}))/(length($1)>1)?pack("H2",$2):$UNESCAPES{$1}/gex;
-  		return $string;
-  	}
-  
-  	# Special cases
-  	if ( $string =~ /^[\'\"!&]/ ) {
-  		die \"CPAN::Meta::YAML does not support a feature in line '$string'";
-  	}
-  	return {} if $string =~ /^{}(?:\s+\#.*)?\z/;
-  	return [] if $string =~ /^\[\](?:\s+\#.*)?\z/;
-  
-  	# Regular unquoted string
-  	if ( $string !~ /^[>|]/ ) {
-  		if (
-  			$string =~ /^(?:-(?:\s|$)|[\@\%\`])/
-  			or
-  			$string =~ /:(?:\s|$)/
-  		) {
-  			die \"CPAN::Meta::YAML found illegal characters in plain scalar: '$string'";
-  		}
-  		$string =~ s/\s+#.*\z//;
-  		return $string;
-  	}
-  
-  	# Error
-  	die \"CPAN::Meta::YAML failed to find multi-line scalar content" unless @$lines;
-  
-  	# Check the indent depth
-  	$lines->[0]   =~ /^(\s*)/;
-  	$indent->[-1] = length("$1");
-  	if ( defined $indent->[-2] and $indent->[-1] <= $indent->[-2] ) {
-  		die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
-  	}
-  
-  	# Pull the lines
-  	my @multiline = ();
-  	while ( @$lines ) {
-  		$lines->[0] =~ /^(\s*)/;
-  		last unless length($1) >= $indent->[-1];
-  		push @multiline, substr(shift(@$lines), length($1));
-  	}
-  
-  	my $j = (substr($string, 0, 1) eq '>') ? ' ' : "\n";
-  	my $t = (substr($string, 1, 1) eq '-') ? ''  : "\n";
-  	return join( $j, @multiline ) . $t;
+  sub _unquote_single {
+      my ($self, $string) = @_;
+      return '' unless length $string;
+      $string =~ s/\'\'/\'/g;
+      return $string;
   }
   
-  # Parse an array
-  sub _read_array {
-  	my ($self, $array, $indent, $lines) = @_;
-  
-  	while ( @$lines ) {
-  		# Check for a new document
-  		if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
-  			while ( @$lines and $lines->[0] !~ /^---/ ) {
-  				shift @$lines;
-  			}
-  			return 1;
-  		}
-  
-  		# Check the indent level
-  		$lines->[0] =~ /^(\s*)/;
-  		if ( length($1) < $indent->[-1] ) {
-  			return 1;
-  		} elsif ( length($1) > $indent->[-1] ) {
-  			die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
-  		}
-  
-  		if ( $lines->[0] =~ /^(\s*\-\s+)[^\'\"]\S*\s*:(?:\s+|$)/ ) {
-  			# Inline nested hash
-  			my $indent2 = length("$1");
-  			$lines->[0] =~ s/-/ /;
-  			push @$array, { };
-  			$self->_read_hash( $array->[-1], [ @$indent, $indent2 ], $lines );
-  
-  		} elsif ( $lines->[0] =~ /^\s*\-(\s*)(.+?)\s*\z/ ) {
-  			# Array entry with a value
-  			shift @$lines;
-  			push @$array, $self->_read_scalar( "$2", [ @$indent, undef ], $lines );
-  
-  		} elsif ( $lines->[0] =~ /^\s*\-\s*\z/ ) {
-  			shift @$lines;
-  			unless ( @$lines ) {
-  				push @$array, undef;
-  				return 1;
-  			}
-  			if ( $lines->[0] =~ /^(\s*)\-/ ) {
-  				my $indent2 = length("$1");
-  				if ( $indent->[-1] == $indent2 ) {
-  					# Null array entry
-  					push @$array, undef;
-  				} else {
-  					# Naked indenter
-  					push @$array, [ ];
-  					$self->_read_array( $array->[-1], [ @$indent, $indent2 ], $lines );
-  				}
-  
-  			} elsif ( $lines->[0] =~ /^(\s*)\S/ ) {
-  				push @$array, { };
-  				$self->_read_hash( $array->[-1], [ @$indent, length("$1") ], $lines );
-  
-  			} else {
-  				die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
-  			}
-  
-  		} elsif ( defined $indent->[-2] and $indent->[-1] == $indent->[-2] ) {
-  			# This is probably a structure like the following...
-  			# ---
-  			# foo:
-  			# - list
-  			# bar: value
-  			#
-  			# ... so lets return and let the hash parser handle it
-  			return 1;
-  
-  		} else {
-  			die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
-  		}
-  	}
-  
-  	return 1;
+  sub _unquote_double {
+      my ($self, $string) = @_;
+      return '' unless length $string;
+      $string =~ s/\\"/"/g;
+      $string =~
+          s{\\([Nnever\\fartz0b]|x([0-9a-fA-F]{2}))}
+           {(length($1)>1)?pack("H2",$2):$UNESCAPES{$1}}gex;
+      return $string;
   }
   
-  # Parse an array
-  sub _read_hash {
-  	my ($self, $hash, $indent, $lines) = @_;
+  # Load a YAML scalar string to the actual Perl scalar
+  sub _load_scalar {
+      my ($self, $string, $indent, $lines) = @_;
   
-  	while ( @$lines ) {
-  		# Check for a new document
-  		if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
-  			while ( @$lines and $lines->[0] !~ /^---/ ) {
-  				shift @$lines;
-  			}
-  			return 1;
-  		}
+      # Trim trailing whitespace
+      $string =~ s/\s*\z//;
   
-  		# Check the indent level
-  		$lines->[0] =~ /^(\s*)/;
-  		if ( length($1) < $indent->[-1] ) {
-  			return 1;
-  		} elsif ( length($1) > $indent->[-1] ) {
-  			die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
-  		}
+      # Explitic null/undef
+      return undef if $string eq '~';
   
-  		# Get the key
-  		unless ( $lines->[0] =~ s/^\s*([^\'\" ][^\n]*?)\s*:(\s+(?:\#.*)?|$)// ) {
-  			if ( $lines->[0] =~ /^\s*[?\'\"]/ ) {
-  				die \"CPAN::Meta::YAML does not support a feature in line '$lines->[0]'";
-  			}
-  			die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
-  		}
-  		my $key = $1;
+      # Single quote
+      if ( $string =~ /^$re_capture_single_quoted$re_trailing_comment\z/ ) {
+          return $self->_unquote_single($1);
+      }
   
-  		# Do we have a value?
-  		if ( length $lines->[0] ) {
-  			# Yes
-  			$hash->{$key} = $self->_read_scalar( shift(@$lines), [ @$indent, undef ], $lines );
-  		} else {
-  			# An indent
-  			shift @$lines;
-  			unless ( @$lines ) {
-  				$hash->{$key} = undef;
-  				return 1;
-  			}
-  			if ( $lines->[0] =~ /^(\s*)-/ ) {
-  				$hash->{$key} = [];
-  				$self->_read_array( $hash->{$key}, [ @$indent, length($1) ], $lines );
-  			} elsif ( $lines->[0] =~ /^(\s*)./ ) {
-  				my $indent2 = length("$1");
-  				if ( $indent->[-1] >= $indent2 ) {
-  					# Null hash entry
-  					$hash->{$key} = undef;
-  				} else {
-  					$hash->{$key} = {};
-  					$self->_read_hash( $hash->{$key}, [ @$indent, length($1) ], $lines );
-  				}
-  			}
-  		}
-  	}
+      # Double quote.
+      if ( $string =~ /^$re_capture_double_quoted$re_trailing_comment\z/ ) {
+          return $self->_unquote_double($1);
+      }
   
-  	return 1;
+      # Special cases
+      if ( $string =~ /^[\'\"!&]/ ) {
+          die \"CPAN::Meta::YAML does not support a feature in line '$string'";
+      }
+      return {} if $string =~ /^{}(?:\s+\#.*)?\z/;
+      return [] if $string =~ /^\[\](?:\s+\#.*)?\z/;
+  
+      # Regular unquoted string
+      if ( $string !~ /^[>|]/ ) {
+          die \"CPAN::Meta::YAML found illegal characters in plain scalar: '$string'"
+              if $string =~ /^(?:-(?:\s|$)|[\@\%\`])/ or
+                  $string =~ /:(?:\s|$)/;
+          $string =~ s/\s+#.*\z//;
+          return $string;
+      }
+  
+      # Error
+      die \"CPAN::Meta::YAML failed to find multi-line scalar content" unless @$lines;
+  
+      # Check the indent depth
+      $lines->[0]   =~ /^(\s*)/;
+      $indent->[-1] = length("$1");
+      if ( defined $indent->[-2] and $indent->[-1] <= $indent->[-2] ) {
+          die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
+      }
+  
+      # Pull the lines
+      my @multiline = ();
+      while ( @$lines ) {
+          $lines->[0] =~ /^(\s*)/;
+          last unless length($1) >= $indent->[-1];
+          push @multiline, substr(shift(@$lines), length($1));
+      }
+  
+      my $j = (substr($string, 0, 1) eq '>') ? ' ' : "\n";
+      my $t = (substr($string, 1, 1) eq '-') ? ''  : "\n";
+      return join( $j, @multiline ) . $t;
   }
+  
+  # Load an array
+  sub _load_array {
+      my ($self, $array, $indent, $lines) = @_;
+  
+      while ( @$lines ) {
+          # Check for a new document
+          if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
+              while ( @$lines and $lines->[0] !~ /^---/ ) {
+                  shift @$lines;
+              }
+              return 1;
+          }
+  
+          # Check the indent level
+          $lines->[0] =~ /^(\s*)/;
+          if ( length($1) < $indent->[-1] ) {
+              return 1;
+          } elsif ( length($1) > $indent->[-1] ) {
+              die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
+          }
+  
+          if ( $lines->[0] =~ /^(\s*\-\s+)[^\'\"]\S*\s*:(?:\s+|$)/ ) {
+              # Inline nested hash
+              my $indent2 = length("$1");
+              $lines->[0] =~ s/-/ /;
+              push @$array, { };
+              $self->_load_hash( $array->[-1], [ @$indent, $indent2 ], $lines );
+  
+          } elsif ( $lines->[0] =~ /^\s*\-\s*\z/ ) {
+              shift @$lines;
+              unless ( @$lines ) {
+                  push @$array, undef;
+                  return 1;
+              }
+              if ( $lines->[0] =~ /^(\s*)\-/ ) {
+                  my $indent2 = length("$1");
+                  if ( $indent->[-1] == $indent2 ) {
+                      # Null array entry
+                      push @$array, undef;
+                  } else {
+                      # Naked indenter
+                      push @$array, [ ];
+                      $self->_load_array(
+                          $array->[-1], [ @$indent, $indent2 ], $lines
+                      );
+                  }
+  
+              } elsif ( $lines->[0] =~ /^(\s*)\S/ ) {
+                  push @$array, { };
+                  $self->_load_hash(
+                      $array->[-1], [ @$indent, length("$1") ], $lines
+                  );
+  
+              } else {
+                  die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
+              }
+  
+          } elsif ( $lines->[0] =~ /^\s*\-(\s*)(.+?)\s*\z/ ) {
+              # Array entry with a value
+              shift @$lines;
+              push @$array, $self->_load_scalar(
+                  "$2", [ @$indent, undef ], $lines
+              );
+  
+          } elsif ( defined $indent->[-2] and $indent->[-1] == $indent->[-2] ) {
+              # This is probably a structure like the following...
+              # ---
+              # foo:
+              # - list
+              # bar: value
+              #
+              # ... so lets return and let the hash parser handle it
+              return 1;
+  
+          } else {
+              die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
+          }
+      }
+  
+      return 1;
+  }
+  
+  # Load a hash
+  sub _load_hash {
+      my ($self, $hash, $indent, $lines) = @_;
+  
+      while ( @$lines ) {
+          # Check for a new document
+          if ( $lines->[0] =~ /^(?:---|\.\.\.)/ ) {
+              while ( @$lines and $lines->[0] !~ /^---/ ) {
+                  shift @$lines;
+              }
+              return 1;
+          }
+  
+          # Check the indent level
+          $lines->[0] =~ /^(\s*)/;
+          if ( length($1) < $indent->[-1] ) {
+              return 1;
+          } elsif ( length($1) > $indent->[-1] ) {
+              die \"CPAN::Meta::YAML found bad indenting in line '$lines->[0]'";
+          }
+  
+          # Find the key
+          my $key;
+  
+          # Quoted keys
+          if ( $lines->[0] =~
+              s/^\s*$re_capture_single_quoted$re_key_value_separator//
+          ) {
+              $key = $self->_unquote_single($1);
+          }
+          elsif ( $lines->[0] =~
+              s/^\s*$re_capture_double_quoted$re_key_value_separator//
+          ) {
+              $key = $self->_unquote_double($1);
+          }
+          elsif ( $lines->[0] =~
+              s/^\s*$re_capture_unquoted_key$re_key_value_separator//
+          ) {
+              $key = $1;
+              $key =~ s/\s+$//;
+          }
+          elsif ( $lines->[0] =~ /^\s*\?/ ) {
+              die \"CPAN::Meta::YAML does not support a feature in line '$lines->[0]'";
+          }
+          else {
+              die \"CPAN::Meta::YAML failed to classify line '$lines->[0]'";
+          }
+  
+          # Do we have a value?
+          if ( length $lines->[0] ) {
+              # Yes
+              $hash->{$key} = $self->_load_scalar(
+                  shift(@$lines), [ @$indent, undef ], $lines
+              );
+          } else {
+              # An indent
+              shift @$lines;
+              unless ( @$lines ) {
+                  $hash->{$key} = undef;
+                  return 1;
+              }
+              if ( $lines->[0] =~ /^(\s*)-/ ) {
+                  $hash->{$key} = [];
+                  $self->_load_array(
+                      $hash->{$key}, [ @$indent, length($1) ], $lines
+                  );
+              } elsif ( $lines->[0] =~ /^(\s*)./ ) {
+                  my $indent2 = length("$1");
+                  if ( $indent->[-1] >= $indent2 ) {
+                      # Null hash entry
+                      $hash->{$key} = undef;
+                  } else {
+                      $hash->{$key} = {};
+                      $self->_load_hash(
+                          $hash->{$key}, [ @$indent, length($1) ], $lines
+                      );
+                  }
+              }
+          }
+      }
+  
+      return 1;
+  }
+  
+  
+  ###
+  # Dumper functions:
   
   # Save an object to a file
-  sub write {
-  	my $self = shift;
-  	my $file = shift or return $self->_error('No file name provided');
+  sub _dump_file {
+      my $self = shift;
   
-  	# Write it to the file
-  	open( CFG, '>' . $file ) or return $self->_error(
-  		"Failed to open file '$file' for writing: $!"
-  		);
-  	print CFG $self->write_string;
-  	close CFG;
+      require Fcntl;
   
-  	return 1;
+      # Check the file
+      my $file = shift or $self->_error( 'You did not specify a file name' );
+  
+      my $fh;
+      # flock if available (or warn if not possible for OS-specific reasons)
+      if ( _can_flock() ) {
+          # Open without truncation (truncate comes after lock)
+          my $flags = Fcntl::O_WRONLY()|Fcntl::O_CREAT();
+          sysopen( $fh, $file, $flags );
+          unless ( $fh ) {
+              $self->_error("Failed to open file '$file' for writing: $!");
+          }
+  
+          # Use no translation and strict UTF-8
+          binmode( $fh, ":raw:encoding(UTF-8)");
+  
+          flock( $fh, Fcntl::LOCK_EX() )
+              or warn "Couldn't lock '$file' for reading: $!";
+  
+          # truncate and spew contents
+          truncate $fh, 0;
+          seek $fh, 0, 0;
+      }
+      else {
+          open $fh, ">:unix:encoding(UTF-8)", $file;
+      }
+  
+      # serialize and spew to the handle
+      print {$fh} $self->_dump_string;
+  
+      # close the file (release the lock)
+      unless ( close $fh ) {
+          $self->_error("Failed to close file '$file': $!");
+      }
+  
+      return 1;
   }
   
   # Save an object to a string
-  sub write_string {
-  	my $self = shift;
-  	return '' unless @$self;
+  sub _dump_string {
+      my $self = shift;
+      return '' unless ref $self && @$self;
   
-  	# Iterate over the documents
-  	my $indent = 0;
-  	my @lines  = ();
-  	foreach my $cursor ( @$self ) {
-  		push @lines, '---';
+      # Iterate over the documents
+      my $indent = 0;
+      my @lines  = ();
   
-  		# An empty document
-  		if ( ! defined $cursor ) {
-  			# Do nothing
+      eval {
+          foreach my $cursor ( @$self ) {
+              push @lines, '---';
   
-  		# A scalar document
-  		} elsif ( ! ref $cursor ) {
-  			$lines[-1] .= ' ' . $self->_write_scalar( $cursor, $indent );
+              # An empty document
+              if ( ! defined $cursor ) {
+                  # Do nothing
   
-  		# A list at the root
-  		} elsif ( ref $cursor eq 'ARRAY' ) {
-  			unless ( @$cursor ) {
-  				$lines[-1] .= ' []';
-  				next;
-  			}
-  			push @lines, $self->_write_array( $cursor, $indent, {} );
+              # A scalar document
+              } elsif ( ! ref $cursor ) {
+                  $lines[-1] .= ' ' . $self->_dump_scalar( $cursor );
   
-  		# A hash at the root
-  		} elsif ( ref $cursor eq 'HASH' ) {
-  			unless ( %$cursor ) {
-  				$lines[-1] .= ' {}';
-  				next;
-  			}
-  			push @lines, $self->_write_hash( $cursor, $indent, {} );
+              # A list at the root
+              } elsif ( ref $cursor eq 'ARRAY' ) {
+                  unless ( @$cursor ) {
+                      $lines[-1] .= ' []';
+                      next;
+                  }
+                  push @lines, $self->_dump_array( $cursor, $indent, {} );
   
-  		} else {
-  			Carp::croak("Cannot serialize " . ref($cursor));
-  		}
-  	}
+              # A hash at the root
+              } elsif ( ref $cursor eq 'HASH' ) {
+                  unless ( %$cursor ) {
+                      $lines[-1] .= ' {}';
+                      next;
+                  }
+                  push @lines, $self->_dump_hash( $cursor, $indent, {} );
   
-  	join '', map { "$_\n" } @lines;
+              } else {
+                  die \("Cannot serialize " . ref($cursor));
+              }
+          }
+      };
+      if ( ref $@ eq 'SCALAR' ) {
+          $self->_error(${$@});
+      } elsif ( $@ ) {
+          $self->_error($@);
+      }
+  
+      join '', map { "$_\n" } @lines;
   }
   
-  sub _write_scalar {
-  	my $string = $_[1];
-  	return '~'  unless defined $string;
-  	return "''" unless length  $string;
-  	if ( $string =~ /[\x00-\x08\x0b-\x0d\x0e-\x1f\"\'\n]/ ) {
-  		$string =~ s/\\/\\\\/g;
-  		$string =~ s/"/\\"/g;
-  		$string =~ s/\n/\\n/g;
-  		$string =~ s/([\x00-\x1f])/\\$UNPRINTABLE[ord($1)]/g;
-  		return qq|"$string"|;
-  	}
-  	if ( $string =~ /(?:^\W|\s|:\z)/ or $QUOTE{$string} ) {
-  		return "'$string'";
-  	}
-  	return $string;
+  sub _has_internal_string_value {
+      my $value = shift;
+      my $b_obj = B::svref_2object(\$value);  # for round trip problem
+      return $b_obj->FLAGS & B::SVf_POK();
   }
   
-  sub _write_array {
-  	my ($self, $array, $indent, $seen) = @_;
-  	if ( $seen->{refaddr($array)}++ ) {
-  		die "CPAN::Meta::YAML does not support circular references";
-  	}
-  	my @lines  = ();
-  	foreach my $el ( @$array ) {
-  		my $line = ('  ' x $indent) . '-';
-  		my $type = ref $el;
-  		if ( ! $type ) {
-  			$line .= ' ' . $self->_write_scalar( $el, $indent + 1 );
-  			push @lines, $line;
-  
-  		} elsif ( $type eq 'ARRAY' ) {
-  			if ( @$el ) {
-  				push @lines, $line;
-  				push @lines, $self->_write_array( $el, $indent + 1, $seen );
-  			} else {
-  				$line .= ' []';
-  				push @lines, $line;
-  			}
-  
-  		} elsif ( $type eq 'HASH' ) {
-  			if ( keys %$el ) {
-  				push @lines, $line;
-  				push @lines, $self->_write_hash( $el, $indent + 1, $seen );
-  			} else {
-  				$line .= ' {}';
-  				push @lines, $line;
-  			}
-  
-  		} else {
-  			die "CPAN::Meta::YAML does not support $type references";
-  		}
-  	}
-  
-  	@lines;
+  sub _dump_scalar {
+      my $string = $_[1];
+      my $is_key = $_[2];
+      # Check this before checking length or it winds up looking like a string!
+      my $has_string_flag = _has_internal_string_value($string);
+      return '~'  unless defined $string;
+      return "''" unless length  $string;
+      if (Scalar::Util::looks_like_number($string)) {
+          # keys and values that have been used as strings get quoted
+          if ( $is_key || $has_string_flag ) {
+              return qq['$string'];
+          }
+          else {
+              return $string;
+          }
+      }
+      if ( $string =~ /[\x00-\x09\x0b-\x0d\x0e-\x1f\x7f-\x9f\'\n]/ ) {
+          $string =~ s/\\/\\\\/g;
+          $string =~ s/"/\\"/g;
+          $string =~ s/\n/\\n/g;
+          $string =~ s/[\x85]/\\N/g;
+          $string =~ s/([\x00-\x1f])/\\$UNPRINTABLE[ord($1)]/g;
+          $string =~ s/([\x7f-\x9f])/'\x' . sprintf("%X",ord($1))/ge;
+          return qq|"$string"|;
+      }
+      if ( $string =~ /(?:^[~!@#%&*|>?:,'"`{}\[\]]|^-+$|\s|:\z)/ or
+          $QUOTE{$string}
+      ) {
+          return "'$string'";
+      }
+      return $string;
   }
   
-  sub _write_hash {
-  	my ($self, $hash, $indent, $seen) = @_;
-  	if ( $seen->{refaddr($hash)}++ ) {
-  		die "CPAN::Meta::YAML does not support circular references";
-  	}
-  	my @lines  = ();
-  	foreach my $name ( sort keys %$hash ) {
-  		my $el   = $hash->{$name};
-  		my $line = ('  ' x $indent) . "$name:";
-  		my $type = ref $el;
-  		if ( ! $type ) {
-  			$line .= ' ' . $self->_write_scalar( $el, $indent + 1 );
-  			push @lines, $line;
+  sub _dump_array {
+      my ($self, $array, $indent, $seen) = @_;
+      if ( $seen->{refaddr($array)}++ ) {
+          die \"CPAN::Meta::YAML does not support circular references";
+      }
+      my @lines  = ();
+      foreach my $el ( @$array ) {
+          my $line = ('  ' x $indent) . '-';
+          my $type = ref $el;
+          if ( ! $type ) {
+              $line .= ' ' . $self->_dump_scalar( $el );
+              push @lines, $line;
   
-  		} elsif ( $type eq 'ARRAY' ) {
-  			if ( @$el ) {
-  				push @lines, $line;
-  				push @lines, $self->_write_array( $el, $indent + 1, $seen );
-  			} else {
-  				$line .= ' []';
-  				push @lines, $line;
-  			}
+          } elsif ( $type eq 'ARRAY' ) {
+              if ( @$el ) {
+                  push @lines, $line;
+                  push @lines, $self->_dump_array( $el, $indent + 1, $seen );
+              } else {
+                  $line .= ' []';
+                  push @lines, $line;
+              }
   
-  		} elsif ( $type eq 'HASH' ) {
-  			if ( keys %$el ) {
-  				push @lines, $line;
-  				push @lines, $self->_write_hash( $el, $indent + 1, $seen );
-  			} else {
-  				$line .= ' {}';
-  				push @lines, $line;
-  			}
+          } elsif ( $type eq 'HASH' ) {
+              if ( keys %$el ) {
+                  push @lines, $line;
+                  push @lines, $self->_dump_hash( $el, $indent + 1, $seen );
+              } else {
+                  $line .= ' {}';
+                  push @lines, $line;
+              }
   
-  		} else {
-  			die "CPAN::Meta::YAML does not support $type references";
-  		}
-  	}
+          } else {
+              die \"CPAN::Meta::YAML does not support $type references";
+          }
+      }
   
-  	@lines;
+      @lines;
   }
+  
+  sub _dump_hash {
+      my ($self, $hash, $indent, $seen) = @_;
+      if ( $seen->{refaddr($hash)}++ ) {
+          die \"CPAN::Meta::YAML does not support circular references";
+      }
+      my @lines  = ();
+      foreach my $name ( sort keys %$hash ) {
+          my $el   = $hash->{$name};
+          my $line = ('  ' x $indent) . $self->_dump_scalar($name, 1) . ":";
+          my $type = ref $el;
+          if ( ! $type ) {
+              $line .= ' ' . $self->_dump_scalar( $el );
+              push @lines, $line;
+  
+          } elsif ( $type eq 'ARRAY' ) {
+              if ( @$el ) {
+                  push @lines, $line;
+                  push @lines, $self->_dump_array( $el, $indent + 1, $seen );
+              } else {
+                  $line .= ' []';
+                  push @lines, $line;
+              }
+  
+          } elsif ( $type eq 'HASH' ) {
+              if ( keys %$el ) {
+                  push @lines, $line;
+                  push @lines, $self->_dump_hash( $el, $indent + 1, $seen );
+              } else {
+                  $line .= ' {}';
+                  push @lines, $line;
+              }
+  
+          } else {
+              die \"CPAN::Meta::YAML does not support $type references";
+          }
+      }
+  
+      @lines;
+  }
+  
+  
+  
+  #####################################################################
+  # DEPRECATED API methods:
+  
+  # Error storage (DEPRECATED as of 1.57)
+  our $errstr    = '';
   
   # Set error
   sub _error {
-  	$CPAN::Meta::YAML::errstr = $_[1];
-  	undef;
+      require Carp;
+      $errstr = $_[1];
+      $errstr =~ s/ at \S+ line \d+.*//;
+      Carp::croak( $errstr );
   }
   
   # Retrieve error
+  my $errstr_warned;
   sub errstr {
-  	$CPAN::Meta::YAML::errstr;
+      require Carp;
+      Carp::carp( "CPAN::Meta::YAML->errstr and \$CPAN::Meta::YAML::errstr is deprecated" )
+          unless $errstr_warned++;
+      $errstr;
   }
-  
   
   
   
   
   #####################################################################
-  # YAML Compatibility
+  # Helper functions. Possibly not needed.
   
-  sub Dump {
-  	CPAN::Meta::YAML->new(@_)->write_string;
-  }
   
-  sub Load {
-  	my $self = CPAN::Meta::YAML->read_string(@_);
-  	unless ( $self ) {
-  		Carp::croak("Failed to load YAML document from string");
-  	}
-  	if ( wantarray ) {
-  		return @$self;
-  	} else {
-  		# To match YAML.pm, return the last document
-  		return $self->[-1];
-  	}
-  }
+  # Use to detect nv or iv
+  use B;
   
-  BEGIN {
-  	*freeze = *Dump;
-  	*thaw   = *Load;
-  }
-  
-  sub DumpFile {
-  	my $file = shift;
-  	CPAN::Meta::YAML->new(@_)->write($file);
-  }
-  
-  sub LoadFile {
-  	my $self = CPAN::Meta::YAML->read($_[0]);
-  	unless ( $self ) {
-  		Carp::croak("Failed to load YAML document from '" . ($_[0] || '') . "'");
-  	}
-  	if ( wantarray ) {
-  		return @$self;
-  	} else {
-  		# Return only the last document to match YAML.pm, 
-  		return $self->[-1];
-  	}
+  # XXX-INGY Is flock CPAN::Meta::YAML's responsibility?
+  # Some platforms can't flock :-(
+  # XXX-XDG I think it is.  When reading and writing files, we ought
+  # to be locking whenever possible.  People (foolishly) use YAML
+  # files for things like session storage, which has race issues.
+  my $HAS_FLOCK;
+  sub _can_flock {
+      if ( defined $HAS_FLOCK ) {
+          return $HAS_FLOCK;
+      }
+      else {
+          require Config;
+          my $c = \%Config::Config;
+          $HAS_FLOCK = grep { $c->{$_} } qw/d_flock d_fcntl_can_lock d_lockf/;
+          require Fcntl if $HAS_FLOCK;
+          return $HAS_FLOCK;
+      }
   }
   
   
-  
-  
-  
+  # XXX-INGY Is this core in 5.8.1? Can we remove this?
+  # XXX-XDG Scalar::Util 1.18 didn't land until 5.8.8, so we need this
   #####################################################################
   # Use Scalar::Util if possible, otherwise emulate it
   
   BEGIN {
-  	local $@;
-  	eval {
-  		require Scalar::Util;
-  	};
-  	my $v = eval("$Scalar::Util::VERSION") || 0;
-  	if ( $@ or $v < 1.18 ) {
-  		eval <<'END_PERL';
+      local $@;
+      if ( eval { require Scalar::Util }
+        && $Scalar::Util::VERSION
+        && eval($Scalar::Util::VERSION) >= 1.18
+      ) {
+          *refaddr = *Scalar::Util::refaddr;
+      }
+      else {
+          eval <<'END_PERL';
   # Scalar::Util failed to load or too old
   sub refaddr {
-  	my $pkg = ref($_[0]) or return undef;
-  	if ( !! UNIVERSAL::can($_[0], 'can') ) {
-  		bless $_[0], 'Scalar::Util::Fake';
-  	} else {
-  		$pkg = undef;
-  	}
-  	"$_[0]" =~ /0x(\w+)/;
-  	my $i = do { local $^W; hex $1 };
-  	bless $_[0], $pkg if defined $pkg;
-  	$i;
+      my $pkg = ref($_[0]) or return undef;
+      if ( !! UNIVERSAL::can($_[0], 'can') ) {
+          bless $_[0], 'Scalar::Util::Fake';
+      } else {
+          $pkg = undef;
+      }
+      "$_[0]" =~ /0x(\w+)/;
+      my $i = do { no warnings 'portable'; hex $1 };
+      bless $_[0], $pkg if defined $pkg;
+      $i;
   }
   END_PERL
-  	} else {
-  		*refaddr = *Scalar::Util::refaddr;
-  	}
+      }
   }
+  
+  
+  
   
   1;
   
-  
+  # XXX-INGY Doc notes I'm putting up here. Changing the doc when it's wrong
+  # but leaving grey area stuff up here.
+  #
+  # I would like to change Read/Write to Load/Dump below without
+  # changing the actual API names.
+  #
+  # It might be better to put Load/Dump API in the SYNOPSIS instead of the
+  # dubious OO API.
+  #
+  # null and bool explanations may be outdated.
   
   =pod
+  
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -10967,7 +11954,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   
   =head1 VERSION
   
-  version 0.008
+  version 0.012
   
   =head1 SYNOPSIS
   
@@ -11003,7 +11990,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   This module is currently derived from L<YAML::Tiny> by Adam Kennedy.  If
   there are bugs in how it parses a particular META.yml file, please file
   a bug report in the YAML::Tiny bugtracker:
-  L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=YAML-Tiny>
+  L<https://rt.cpan.org/Public/Dist/Display.html?Name=YAML-Tiny>
   
   =head1 SEE ALSO
   
@@ -11016,7 +12003,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   =head2 Bugs / Feature Requests
   
   Please report any bugs or feature requests through the issue tracker
-  at L<http://rt.cpan.org/Public/Dist/Display.html?Name=CPAN-Meta-YAML>.
+  at L<https://github.com/dagolden/CPAN-Meta-YAML/issues>.
   You will be notified automatically of any progress on your issue.
   
   =head2 Source Code
@@ -11024,9 +12011,9 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   This is open source software.  The code repository is available for
   public review and contribution under the terms of the license.
   
-  L<https://github.com/dagolden/cpan-meta-yaml>
+  L<https://github.com/dagolden/CPAN-Meta-YAML>
   
-    git clone https://github.com/dagolden/cpan-meta-yaml.git
+    git clone https://github.com/dagolden/CPAN-Meta-YAML.git
   
   =head1 AUTHORS
   
@@ -11051,7 +12038,6 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   
   =cut
   
-  
   __END__
   
   
@@ -11060,7 +12046,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   
 CPAN_META_YAML
 
-$fatpacked{"Exporter.pm"} = <<'EXPORTER';
+$fatpacked{"Exporter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'EXPORTER';
   package Exporter;
   
   require 5.006;
@@ -11654,7 +12640,7 @@ $fatpacked{"Exporter.pm"} = <<'EXPORTER';
   
 EXPORTER
 
-$fatpacked{"Exporter/Heavy.pm"} = <<'EXPORTER_HEAVY';
+$fatpacked{"Exporter/Heavy.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'EXPORTER_HEAVY';
   package Exporter::Heavy;
   
   use strict;
@@ -11905,7 +12891,7 @@ $fatpacked{"Exporter/Heavy.pm"} = <<'EXPORTER_HEAVY';
   1;
 EXPORTER_HEAVY
 
-$fatpacked{"File/pushd.pm"} = <<'FILE_PUSHD';
+$fatpacked{"File/pushd.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'FILE_PUSHD';
   use strict;
   use warnings;
   package File::pushd;
@@ -12187,24 +13173,87 @@ $fatpacked{"File/pushd.pm"} = <<'FILE_PUSHD';
   =cut
 FILE_PUSHD
 
-$fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
+$fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_TINY';
   # vim: ts=4 sts=4 sw=4 et:
   package HTTP::Tiny;
   use strict;
   use warnings;
   # ABSTRACT: A small, simple, correct HTTP/1.1 client
-  our $VERSION = '0.034'; # VERSION
+  our $VERSION = '0.043'; # VERSION
   
   use Carp ();
   
+  # =method new
+  #
+  #     $http = HTTP::Tiny->new( %attributes );
+  #
+  # This constructor returns a new HTTP::Tiny object.  Valid attributes include:
+  #
+  # =for :list
+  # * C<agent>
+  # A user-agent string (defaults to 'HTTP-Tiny/$VERSION'). If C<agent> ends in a space character, the default user-agent string is appended.
+  # * C<cookie_jar>
+  # An instance of L<HTTP::CookieJar> or equivalent class that supports the C<add> and C<cookie_header> methods
+  # * C<default_headers>
+  # A hashref of default headers to apply to requests
+  # * C<local_address>
+  # The local IP address to bind to
+  # * C<keep_alive>
+  # Whether to reuse the last connection (if for the same scheme, host and port) (defaults to 1)
+  # * C<max_redirect>
+  # Maximum number of redirects allowed (defaults to 5)
+  # * C<max_size>
+  # Maximum response size (only when not using a data callback).  If defined, responses larger than this will return an exception.
+  # * C<http_proxy>
+  # URL of a proxy server to use for HTTP connections (default is C<$ENV{http_proxy}> if set)
+  # * C<https_proxy>
+  # URL of a proxy server to use for HTTPS connections (default is C<$ENV{https_proxy}> if set)
+  # * C<proxy>
+  # URL of a generic proxy server for both HTTP and HTTPS connections (default is C<$ENV{all_proxy}> if set)
+  # * C<no_proxy>
+  # List of domain suffixes that should not be proxied.  Must be a comma-separated string or an array reference. (default is C<$ENV{no_proxy}>)
+  # * C<timeout>
+  # Request timeout in seconds (default is 60)
+  # * C<verify_SSL>
+  # A boolean that indicates whether to validate the SSL certificate of an C<https>
+  # connection (default is false)
+  # * C<SSL_options>
+  # A hashref of C<SSL_*> options to pass through to L<IO::Socket::SSL>
+  #
+  # Exceptions from C<max_size>, C<timeout> or other errors will result in a
+  # pseudo-HTTP status code of 599 and a reason of "Internal Exception". The
+  # content field in the response will contain the text of the exception.
+  #
+  # The C<keep_alive> parameter enables a persistent connection, but only to a
+  # single destination scheme, host and port.  Also, if any connection-relevant
+  # attributes are modified, a persistent connection will be dropped.  If you want
+  # persistent connections across multiple destinations, use multiple HTTP::Tiny
+  # objects.
+  #
+  # See L</SSL SUPPORT> for more on the C<verify_SSL> and C<SSL_options> attributes.
+  #
+  # =cut
   
   my @attributes;
   BEGIN {
-      @attributes = qw(cookie_jar default_headers local_address max_redirect max_size proxy no_proxy timeout SSL_options verify_SSL);
+      @attributes = qw(
+          cookie_jar default_headers http_proxy https_proxy keep_alive
+          local_address max_redirect max_size proxy no_proxy timeout
+          SSL_options verify_SSL
+      );
+      my %persist_ok = map {; $_ => 1 } qw(
+          cookie_jar default_headers max_redirect max_size
+      );
       no strict 'refs';
+      no warnings 'uninitialized';
       for my $accessor ( @attributes ) {
           *{$accessor} = sub {
-              @_ > 1 ? $_[0]->{$accessor} = $_[1] : $_[0]->{$accessor};
+              @_ > 1
+                  ? do {
+                      delete $_[0]->{handle} if !$persist_ok{$accessor} && $_[1] ne $_[0]->{$accessor};
+                      $_[0]->{$accessor} = $_[1]
+                  }
+                  : $_[0]->{$accessor};
           };
       }
   }
@@ -12224,6 +13273,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       my $self = {
           max_redirect => 5,
           timeout      => 60,
+          keep_alive   => 1,
           verify_SSL   => $args{verify_SSL} || $args{verify_ssl} || 0, # no verification by default
           no_proxy     => $ENV{no_proxy},
       };
@@ -12238,13 +13288,43 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
       $self->agent( exists $args{agent} ? $args{agent} : $class->_agent );
   
-      # Never override proxy argument as this breaks backwards compat.
-      if (!exists $self->{proxy} && (my $http_proxy = $ENV{http_proxy})) {
-          if ($http_proxy =~ m{\Ahttp://[^/?#:@]+:\d+/?\z}) {
-              $self->{proxy} = $http_proxy;
+      $self->_set_proxies;
+  
+      return $self;
+  }
+  
+  sub _set_proxies {
+      my ($self) = @_;
+  
+      if (! $self->{proxy} ) {
+          $self->{proxy} = $ENV{all_proxy} || $ENV{ALL_PROXY};
+          if ( defined $self->{proxy} ) {
+              $self->_split_proxy( 'generic proxy' => $self->{proxy} ); # validate
           }
           else {
-              Carp::croak(qq{Environment 'http_proxy' must be in format http://<host>:<port>/\n});
+              delete $self->{proxy};
+          }
+      }
+  
+      if (! $self->{http_proxy} ) {
+          $self->{http_proxy} = $ENV{http_proxy} || $self->{proxy};
+          if ( defined $self->{http_proxy} ) {
+              $self->_split_proxy( http_proxy => $self->{http_proxy} ); # validate
+              $self->{_has_proxy}{http} = 1;
+          }
+          else {
+              delete $self->{http_proxy};
+          }
+      }
+  
+      if (! $self->{https_proxy} ) {
+          $self->{https_proxy} = $ENV{https_proxy} || $ENV{HTTPS_PROXY} || $self->{proxy};
+          if ( $self->{https_proxy} ) {
+              $self->_split_proxy( https_proxy => $self->{https_proxy} ); # validate
+              $self->{_has_proxy}{https} = 1;
+          }
+          else {
+              delete $self->{https_proxy};
           }
       }
   
@@ -12254,9 +13334,22 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
               (defined $self->{no_proxy}) ? [ split /\s*,\s*/, $self->{no_proxy} ] : [];
       }
   
-      return $self;
+      return;
   }
   
+  # =method get|head|put|post|delete
+  #
+  #     $response = $http->get($url);
+  #     $response = $http->get($url, \%options);
+  #     $response = $http->head($url);
+  #
+  # These methods are shorthand for calling C<request()> for the given method.  The
+  # URL must have unsafe characters escaped and international domain names encoded.
+  # See C<request()> for valid options and a description of the response.
+  #
+  # The C<success> field of the response will be true if the status code is 2XX.
+  #
+  # =cut
   
   for my $sub_name ( qw/get head put post delete/ ) {
       my $req_method = uc $sub_name;
@@ -12271,6 +13364,25 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   HERE
   }
   
+  # =method post_form
+  #
+  #     $response = $http->post_form($url, $form_data);
+  #     $response = $http->post_form($url, $form_data, \%options);
+  #
+  # This method executes a C<POST> request and sends the key/value pairs from a
+  # form data hash or array reference to the given URL with a C<content-type> of
+  # C<application/x-www-form-urlencoded>.  If data is provided as an array
+  # reference, the order is preserved; if provided as a hash reference, the terms
+  # are sorted on key and value for consistency.  See documentation for the
+  # C<www_form_urlencode> method for details on the encoding.
+  #
+  # The URL must have unsafe characters escaped and international domain names
+  # encoded.  See C<request()> for valid options and a description of the response.
+  # Any C<content-type> header or content in the options hashref will be ignored.
+  #
+  # The C<success> field of the response will be true if the status code is 2XX.
+  #
+  # =cut
   
   sub post_form {
       my ($self, $url, $data, $args) = @_;
@@ -12294,6 +13406,28 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       );
   }
   
+  # =method mirror
+  #
+  #     $response = $http->mirror($url, $file, \%options)
+  #     if ( $response->{success} ) {
+  #         print "$file is up to date\n";
+  #     }
+  #
+  # Executes a C<GET> request for the URL and saves the response body to the file
+  # name provided.  The URL must have unsafe characters escaped and international
+  # domain names encoded.  If the file already exists, the request will include an
+  # C<If-Modified-Since> header with the modification timestamp of the file.  You
+  # may specify a different C<If-Modified-Since> header yourself in the C<<
+  # $options->{headers} >> hash.
+  #
+  # The C<success> field of the response will be true if the status code is 2XX
+  # or if the status code is 304 (unmodified).
+  #
+  # If the file was modified and the server response includes a properly
+  # formatted C<Last-Modified> header, the file modification time will
+  # be updated accordingly.
+  #
+  # =cut
   
   sub mirror {
       my ($self, $url, $file, $args) = @_;
@@ -12303,13 +13437,16 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
           $args->{headers}{'if-modified-since'} ||= $self->_http_date($mtime);
       }
       my $tempfile = $file . int(rand(2**31));
-      open my $fh, ">", $tempfile
-          or Carp::croak(qq/Error: Could not open temporary file $tempfile for downloading: $!\n/);
+  
+      require Fcntl;
+      sysopen my $fh, $tempfile, Fcntl::O_CREAT()|Fcntl::O_EXCL()|Fcntl::O_WRONLY()
+         or Carp::croak(qq/Error: Could not create temporary file $tempfile for downloading: $!\n/);
       binmode $fh;
       $args->{data_callback} = sub { print {$fh} $_[0] };
       my $response = $self->request('GET', $url, $args);
       close $fh
-          or Carp::croak(qq/Error: Could not close temporary file $tempfile: $!\n/);
+          or Carp::croak(qq/Error: Caught error closing temporary file $tempfile: $!\n/);
+  
       if ( $response->{success} ) {
           rename $tempfile, $file
               or Carp::croak(qq/Error replacing $file with $tempfile: $!\n/);
@@ -12323,6 +13460,86 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       return $response;
   }
   
+  # =method request
+  #
+  #     $response = $http->request($method, $url);
+  #     $response = $http->request($method, $url, \%options);
+  #
+  # Executes an HTTP request of the given method type ('GET', 'HEAD', 'POST',
+  # 'PUT', etc.) on the given URL.  The URL must have unsafe characters escaped and
+  # international domain names encoded.
+  #
+  # If the URL includes a "user:password" stanza, they will be used for Basic-style
+  # authorization headers.  (Authorization headers will not be included in a
+  # redirected request.) For example:
+  #
+  #     $http->request('GET', 'http://Aladdin:open sesame@example.com/');
+  #
+  # If the "user:password" stanza contains reserved characters, they must
+  # be percent-escaped:
+  #
+  #     $http->request('GET', 'http://john%40example.com:password@example.com/');
+  #
+  # A hashref of options may be appended to modify the request.
+  #
+  # Valid options are:
+  #
+  # =for :list
+  # * C<headers>
+  # A hashref containing headers to include with the request.  If the value for
+  # a header is an array reference, the header will be output multiple times with
+  # each value in the array.  These headers over-write any default headers.
+  # * C<content>
+  # A scalar to include as the body of the request OR a code reference
+  # that will be called iteratively to produce the body of the request
+  # * C<trailer_callback>
+  # A code reference that will be called if it exists to provide a hashref
+  # of trailing headers (only used with chunked transfer-encoding)
+  # * C<data_callback>
+  # A code reference that will be called for each chunks of the response
+  # body received.
+  #
+  # If the C<content> option is a code reference, it will be called iteratively
+  # to provide the content body of the request.  It should return the empty
+  # string or undef when the iterator is exhausted.
+  #
+  # If the C<content> option is the empty string, no C<content-type> or
+  # C<content-length> headers will be generated.
+  #
+  # If the C<data_callback> option is provided, it will be called iteratively until
+  # the entire response body is received.  The first argument will be a string
+  # containing a chunk of the response body, the second argument will be the
+  # in-progress response hash reference, as described below.  (This allows
+  # customizing the action of the callback based on the C<status> or C<headers>
+  # received prior to the content body.)
+  #
+  # The C<request> method returns a hashref containing the response.  The hashref
+  # will have the following keys:
+  #
+  # =for :list
+  # * C<success>
+  # Boolean indicating whether the operation returned a 2XX status code
+  # * C<url>
+  # URL that provided the response. This is the URL of the request unless
+  # there were redirections, in which case it is the last URL queried
+  # in a redirection chain
+  # * C<status>
+  # The HTTP status code of the response
+  # * C<reason>
+  # The response phrase returned by the server
+  # * C<content>
+  # The body of the response.  If the response does not have any content
+  # or if a data callback is provided to consume the response body,
+  # this will be the empty string
+  # * C<headers>
+  # A hashref of header fields.  All header field names will be normalized
+  # to be lower case. If a header is repeated, the value will be an arrayref;
+  # it will otherwise be a scalar string containing the value
+  #
+  # On an exception during the execution of the request, the C<status> field will
+  # contain 599, and the C<content> field will contain the text of the exception.
+  #
+  # =cut
   
   my %idempotent = map { $_ => 1 } qw/GET HEAD PUT DELETE OPTIONS TRACE/;
   
@@ -12340,7 +13557,14 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
               && $@ =~ m{^(?:Socket closed|Unexpected end)};
       }
   
-      if (my $e = "$@") {
+      if (my $e = $@) {
+          # maybe we got a response hash thrown from somewhere deep
+          if ( ref $e eq 'HASH' && exists $e->{status} ) {
+              return $e;
+          }
+  
+          # otherwise, stringify it
+          $e = "$e";
           $response = {
               url     => $url,
               success => q{},
@@ -12356,6 +13580,19 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       return $response;
   }
   
+  # =method www_form_urlencode
+  #
+  #     $params = $http->www_form_urlencode( $data );
+  #     $response = $http->get("http://example.com/query?$params");
+  #
+  # This method converts the key/value pairs from a data hash or array reference
+  # into a C<x-www-form-urlencoded> string.  The keys and values from the data
+  # reference will be UTF-8 encoded and escaped per RFC 3986.  If a value is an
+  # array reference, the key will be repeated with each of the values of the array
+  # reference.  If data is provided as a hash reference, the key/value pairs in the
+  # resulting string will be sorted by key and value for consistent ordering.
+  #
+  # =cut
   
   sub www_form_urlencode {
       my ($self, $data) = @_;
@@ -12379,7 +13616,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
           }
       }
   
-      return join("&", sort @terms);
+      return join("&", (ref $data eq 'ARRAY') ? (@terms) : (sort @terms) );
   }
   
   #--------------------------------------------------------------------------#
@@ -12405,27 +13642,23 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       my $request = {
           method    => $method,
           scheme    => $scheme,
+          host      => $host,
           host_port => ($port == $DefaultPort{$scheme} ? $host : "$host:$port"),
           uri       => $path_query,
           headers   => {},
       };
   
-      my $handle  = HTTP::Tiny::Handle->new(
-          timeout         => $self->{timeout},
-          SSL_options     => $self->{SSL_options},
-          verify_SSL      => $self->{verify_SSL},
-          local_address   => $self->{local_address},
-      );
-  
-      if ($self->{proxy} && ! grep { $host =~ /\Q$_\E$/ } @{$self->{no_proxy}}) {
-          $request->{uri} = "$scheme://$request->{host_port}$path_query";
-          die(qq/HTTPS via proxy is not supported\n/)
-              if $request->{scheme} eq 'https';
-          $handle->connect(($self->_split_url($self->{proxy}))[0..2]);
+      # We remove the cached handle so it is not reused in the case of redirect.
+      # If all is well, it will be recached at the end of _request.  We only
+      # reuse for the same scheme, host and port
+      my $handle = delete $self->{handle};
+      if ( $handle ) {
+          unless ( $handle->can_reuse( $scheme, $host, $port ) ) {
+              $handle->close;
+              undef $handle;
+          }
       }
-      else {
-          $handle->connect($scheme, $host, $port);
-      }
+      $handle ||= $self->_open_handle( $request, $scheme, $host, $port );
   
       $self->_prepare_headers_and_cb($request, $args, $url, $auth);
       $handle->write_request($request);
@@ -12441,18 +13674,138 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
           return $self->_request(@redir_args, $args);
       }
   
+      my $known_message_length;
       if ($method eq 'HEAD' || $response->{status} =~ /^[23]04/) {
           # response has no message body
+          $known_message_length = 1;
       }
       else {
           my $data_cb = $self->_prepare_data_cb($response, $args);
-          $handle->read_body($data_cb, $response);
+          $known_message_length = $handle->read_body($data_cb, $response);
       }
   
-      $handle->close;
-      $response->{success} = substr($response->{status},0,1) eq '2';
+      if ( $self->{keep_alive}
+          && $known_message_length
+          && $response->{protocol} eq 'HTTP/1.1'
+          && ($response->{headers}{connection} || '') ne 'close'
+      ) {
+          $self->{handle} = $handle;
+      }
+      else {
+          $handle->close;
+      }
+  
+      $response->{success} = substr( $response->{status}, 0, 1 ) eq '2';
       $response->{url} = $url;
       return $response;
+  }
+  
+  sub _open_handle {
+      my ($self, $request, $scheme, $host, $port) = @_;
+  
+      my $handle  = HTTP::Tiny::Handle->new(
+          timeout         => $self->{timeout},
+          SSL_options     => $self->{SSL_options},
+          verify_SSL      => $self->{verify_SSL},
+          local_address   => $self->{local_address},
+          keep_alive      => $self->{keep_alive}
+      );
+  
+      if ($self->{_has_proxy}{$scheme} && ! grep { $host =~ /\Q$_\E$/ } @{$self->{no_proxy}}) {
+          return $self->_proxy_connect( $request, $handle );
+      }
+      else {
+          return $handle->connect($scheme, $host, $port);
+      }
+  }
+  
+  sub _proxy_connect {
+      my ($self, $request, $handle) = @_;
+  
+      my @proxy_vars;
+      if ( $request->{scheme} eq 'https' ) {
+          Carp::croak(qq{No https_proxy defined}) unless $self->{https_proxy};
+          @proxy_vars = $self->_split_proxy( https_proxy => $self->{https_proxy} );
+          if ( $proxy_vars[0] eq 'https' ) {
+              Carp::croak(qq{Can't proxy https over https: $request->{uri} via $self->{https_proxy}});
+          }
+      }
+      else {
+          Carp::croak(qq{No http_proxy defined}) unless $self->{http_proxy};
+          @proxy_vars = $self->_split_proxy( http_proxy => $self->{http_proxy} );
+      }
+  
+      my ($p_scheme, $p_host, $p_port, $p_auth) = @proxy_vars;
+  
+      if ( length $p_auth && ! defined $request->{headers}{'proxy-authorization'} ) {
+          $self->_add_basic_auth_header( $request, 'proxy-authorization' => $p_auth );
+      }
+  
+      $handle->connect($p_scheme, $p_host, $p_port);
+  
+      if ($request->{scheme} eq 'https') {
+          $self->_create_proxy_tunnel( $request, $handle );
+      }
+      else {
+          # non-tunneled proxy requires absolute URI
+          $request->{uri} = "$request->{scheme}://$request->{host_port}$request->{uri}";
+      }
+  
+      return $handle;
+  }
+  
+  sub _split_proxy {
+      my ($self, $type, $proxy) = @_;
+  
+      my ($scheme, $host, $port, $path_query, $auth) = eval { $self->_split_url($proxy) };
+  
+      unless(
+          defined($scheme) && length($scheme) && length($host) && length($port)
+          && $path_query eq '/'
+      ) {
+          Carp::croak(qq{$type URL must be in format http[s]://[auth@]<host>:<port>/\n});
+      }
+  
+      return ($scheme, $host, $port, $auth);
+  }
+  
+  sub _create_proxy_tunnel {
+      my ($self, $request, $handle) = @_;
+  
+      $handle->_assert_ssl;
+  
+      my $agent = exists($request->{headers}{'user-agent'})
+          ? $request->{headers}{'user-agent'} : $self->{agent};
+  
+      my $connect_request = {
+          method    => 'CONNECT',
+          uri       => $request->{host_port},
+          headers   => {
+              host => $request->{host_port},
+              'user-agent' => $agent,
+          }
+      };
+  
+      if ( $request->{headers}{'proxy-authorization'} ) {
+          $connect_request->{headers}{'proxy-authorization'} =
+              delete $request->{headers}{'proxy-authorization'};
+      }
+  
+      $handle->write_request($connect_request);
+      my $response;
+      do { $response = $handle->read_response_header }
+          until (substr($response->{status},0,1) ne '1');
+  
+      # if CONNECT failed, throw the response so it will be
+      # returned from the original request() method;
+      unless (substr($response->{status},0,1) eq '2') {
+          die $response;
+      }
+  
+      # tunnel established, so start SSL handshake
+      $handle->start_ssl( $request->{host} );
+  
+      return;
   }
   
   sub _prepare_headers_and_cb {
@@ -12465,8 +13818,9 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
           }
       }
       $request->{headers}{'host'}         = $request->{host_port};
-      $request->{headers}{'connection'}   = "close";
       $request->{headers}{'user-agent'} ||= $self->{agent};
+      $request->{headers}{'connection'}   = "close"
+          unless $self->{keep_alive};
   
       if ( defined $args->{content} ) {
           if (ref $args->{content} eq 'CODE') {
@@ -12499,12 +13853,18 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       }
   
       # if we have Basic auth parameters, add them
-      if ( length $auth && ! defined $request->{headers}{authentication} ) {
-          require MIME::Base64;
-          $request->{headers}{authorization} =
-              "Basic " . MIME::Base64::encode_base64($auth, "");
+      if ( length $auth && ! defined $request->{headers}{authorization} ) {
+          $self->_add_basic_auth_header( $request, 'authorization' => $auth );
       }
   
+      return;
+  }
+  
+  sub _add_basic_auth_header {
+      my ($self, $request, $header, $auth) = @_;
+      require MIME::Base64;
+      $request->{headers}{$header} =
+          "Basic " . MIME::Base64::encode_base64($auth, "");
       return;
   }
   
@@ -12583,6 +13943,8 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       $authority = (length($authority)) ? $authority : 'localhost';
       if ( $authority =~ /@/ ) {
           ($auth,$host) = $authority =~ m/\A([^@]*)@(.*)\z/;   # user:pass@host
+          # userinfo might be percent escaped, so recover real auth info
+          $auth =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
       }
       else {
           $host = $authority;
@@ -12658,6 +14020,14 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   use Errno      qw[EINTR EPIPE];
   use IO::Socket qw[SOCK_STREAM];
   
+  # PERL_HTTP_TINY_IPV4_ONLY is a private environment variable to force old
+  # behavior if someone is unable to boostrap CPAN from a new perl install; it is
+  # not intended for general, per-client use and may be removed in the future
+  my $SOCKET_CLASS =
+      $ENV{PERL_HTTP_TINY_IPV4_ONLY} ? 'IO::Socket::INET' :
+      eval { require IO::Socket::IP; IO::Socket::IP->VERSION(0.25) } ? 'IO::Socket::IP' :
+      'IO::Socket::INET';
+  
   sub BUFSIZE () { 32768 } ## no critic
   
   my $Printable = sub {
@@ -12689,50 +14059,61 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       my ($self, $scheme, $host, $port) = @_;
   
       if ( $scheme eq 'https' ) {
-          # Need IO::Socket::SSL 1.42 for SSL_create_ctx_callback
-          die(qq/IO::Socket::SSL 1.42 must be installed for https support\n/)
-              unless eval {require IO::Socket::SSL; IO::Socket::SSL->VERSION(1.42)};
-          # Need Net::SSLeay 1.49 for MODE_AUTO_RETRY
-          die(qq/Net::SSLeay 1.49 must be installed for https support\n/)
-              unless eval {require Net::SSLeay; Net::SSLeay->VERSION(1.49)};
+          $self->_assert_ssl;
       }
       elsif ( $scheme ne 'http' ) {
         die(qq/Unsupported URL scheme '$scheme'\n/);
       }
-      $self->{fh} = 'IO::Socket::INET'->new(
+      $self->{fh} = $SOCKET_CLASS->new(
           PeerHost  => $host,
           PeerPort  => $port,
           $self->{local_address} ?
               ( LocalAddr => $self->{local_address} ) : (),
           Proto     => 'tcp',
           Type      => SOCK_STREAM,
-          Timeout   => $self->{timeout}
+          Timeout   => $self->{timeout},
+          KeepAlive => !!$self->{keep_alive}
       ) or die(qq/Could not connect to '$host:$port': $@\n/);
   
       binmode($self->{fh})
         or die(qq/Could not binmode() socket: '$!'\n/);
   
-      if ( $scheme eq 'https') {
-          my $ssl_args = $self->_ssl_args($host);
-          IO::Socket::SSL->start_SSL(
-              $self->{fh},
-              %$ssl_args,
-              SSL_create_ctx_callback => sub {
-                  my $ctx = shift;
-                  Net::SSLeay::CTX_set_mode($ctx, Net::SSLeay::MODE_AUTO_RETRY());
-              },
-          );
+      $self->start_ssl($host) if $scheme eq 'https';
   
-          unless ( ref($self->{fh}) eq 'IO::Socket::SSL' ) {
-              my $ssl_err = IO::Socket::SSL->errstr;
-              die(qq/SSL connection failed for $host: $ssl_err\n/);
-          }
-      }
-  
+      $self->{scheme} = $scheme;
       $self->{host} = $host;
       $self->{port} = $port;
   
       return $self;
+  }
+  
+  sub start_ssl {
+      my ($self, $host) = @_;
+  
+      # As this might be used via CONNECT after an SSL session
+      # to a proxy, we shut down any existing SSL before attempting
+      # the handshake
+      if ( ref($self->{fh}) eq 'IO::Socket::SSL' ) {
+          unless ( $self->{fh}->stop_SSL ) {
+              my $ssl_err = IO::Socket::SSL->errstr;
+              die(qq/Error halting prior SSL connection: $ssl_err/);
+          }
+      }
+  
+      my $ssl_args = $self->_ssl_args($host);
+      IO::Socket::SSL->start_SSL(
+          $self->{fh},
+          %$ssl_args,
+          SSL_create_ctx_callback => sub {
+              my $ctx = shift;
+              Net::SSLeay::CTX_set_mode($ctx, Net::SSLeay::MODE_AUTO_RETRY());
+          },
+      );
+  
+      unless ( ref($self->{fh}) eq 'IO::Socket::SSL' ) {
+          my $ssl_err = IO::Socket::SSL->errstr;
+          die(qq/SSL connection failed for $host: $ssl_err\n/);
+      }
   }
   
   sub close {
@@ -12908,11 +14289,13 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       'x-xss-protection' => 'X-XSS-Protection',
   );
   
+  # to avoid multiple small writes and hence nagle, you can pass the method line or anything else to
+  # combine writes.
   sub write_header_lines {
-      (@_ == 2 && ref $_[1] eq 'HASH') || die(q/Usage: $handle->write_header_lines(headers)/ . "\n");
-      my($self, $headers) = @_;
+      (@_ == 2 || @_ == 3 && ref $_[1] eq 'HASH') || die(q/Usage: $handle->write_header_lines(headers[,prefix])/ . "\n");
+      my($self, $headers, $prefix_data) = @_;
   
-      my $buf = '';
+      my $buf = (defined $prefix_data ? $prefix_data : '');
       while (my ($k, $v) = each %$headers) {
           my $field_name = lc $k;
           if (exists $HeaderCase{$field_name}) {
@@ -12934,17 +14317,17 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       return $self->write($buf);
   }
   
+  # return value indicates whether message length was defined; this is generally
+  # true unless there was no content-length header and we just read until EOF.
+  # Other message length errors are thrown as exceptions
   sub read_body {
       @_ == 3 || die(q/Usage: $handle->read_body(callback, response)/ . "\n");
       my ($self, $cb, $response) = @_;
       my $te = $response->{headers}{'transfer-encoding'} || '';
-      if ( grep { /chunked/i } ( ref $te eq 'ARRAY' ? @$te : $te ) ) {
-          $self->read_chunked_body($cb, $response);
-      }
-      else {
-          $self->read_content_body($cb, $response);
-      }
-      return;
+      my $chunked = grep { /chunked/i } ( ref $te eq 'ARRAY' ? @$te : $te ) ;
+      return $chunked
+          ? $self->read_chunked_body($cb, $response)
+          : $self->read_content_body($cb, $response);
   }
   
   sub write_body {
@@ -12970,11 +14353,11 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
               $cb->($self->read($read, 0), $response);
               $len -= $read;
           }
+          return length($self->{rbuf}) == 0;
       }
-      else {
-          my $chunk;
-          $cb->($chunk, $response) while length( $chunk = $self->read(BUFSIZE, 1) );
-      }
+  
+      my $chunk;
+      $cb->($chunk, $response) while length( $chunk = $self->read(BUFSIZE, 1) );
   
       return;
   }
@@ -13023,7 +14406,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
             or die(qq/Malformed chunk: missing CRLF after chunk data\n/);
       }
       $self->read_header_lines($response->{headers});
-      return;
+      return 1;
   }
   
   sub write_chunked_body {
@@ -13072,10 +14455,10 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
           unless $version =~ /0*1\.0*[01]/;
   
       return {
-          status   => $status,
-          reason   => $reason,
-          headers  => $self->read_header_lines,
-          protocol => $protocol,
+          status       => $status,
+          reason       => $reason,
+          headers      => $self->read_header_lines,
+          protocol     => $protocol,
       };
   }
   
@@ -13083,8 +14466,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       @_ == 4 || die(q/Usage: $handle->write_request_header(method, request_uri, headers)/ . "\n");
       my ($self, $method, $request_uri, $headers) = @_;
   
-      return $self->write("$method $request_uri HTTP/1.1\x0D\x0A")
-           + $self->write_header_lines($headers);
+      return $self->write_header_lines($headers, "$method $request_uri HTTP/1.1\x0D\x0A");
   }
   
   sub _do_timeout {
@@ -13121,6 +14503,9 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   sub can_read {
       @_ == 1 || @_ == 2 || die(q/Usage: $handle->can_read([timeout])/ . "\n");
       my $self = shift;
+      if ( ref($self->{fh}) eq 'IO::Socket::SSL' ) {
+          return 1 if $self->{fh}->pending;
+      }
       return $self->_do_timeout('read', @_)
   }
   
@@ -13128,6 +14513,27 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       @_ == 1 || @_ == 2 || die(q/Usage: $handle->can_write([timeout])/ . "\n");
       my $self = shift;
       return $self->_do_timeout('write', @_)
+  }
+  
+  sub _assert_ssl {
+      # Need IO::Socket::SSL 1.42 for SSL_create_ctx_callback
+      die(qq/IO::Socket::SSL 1.42 must be installed for https support\n/)
+          unless eval {require IO::Socket::SSL; IO::Socket::SSL->VERSION(1.42)};
+      # Need Net::SSLeay 1.49 for MODE_AUTO_RETRY
+      die(qq/Net::SSLeay 1.49 must be installed for https support\n/)
+          unless eval {require Net::SSLeay; Net::SSLeay->VERSION(1.49)};
+  }
+  
+  sub can_reuse {
+      my ($self,$scheme,$host,$port) = @_;
+      return 0 if
+           length($self->{rbuf})
+          || $scheme ne $self->{scheme}
+          || $host ne $self->{host}
+          || $port ne $self->{port}
+          || eval { $self->can_read(0) }
+          || $@ ;
+          return 1;
   }
   
   # Try to find a CA bundle to validate the SSL cert,
@@ -13158,7 +14564,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
       my ($self, $host) = @_;
   
       my %ssl_args;
-      
+  
       # This test reimplements IO::Socket::SSL::can_client_sni(), which wasn't
       # added until IO::Socket::SSL 1.84
       if ( Net::SSLeay::OPENSSL_VERSION_NUMBER() >= 0x01000000 ) {
@@ -13190,7 +14596,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -13198,7 +14604,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =head1 VERSION
   
-  version 0.034
+  version 0.043
   
   =head1 SYNOPSIS
   
@@ -13220,12 +14626,16 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =head1 DESCRIPTION
   
-  This is a very simple HTTP/1.1 client, designed for doing simple GET
+  This is a very simple HTTP/1.1 client, designed for doing simple
   requests without the overhead of a large framework like L<LWP::UserAgent>.
   
   It is more correct and more complete than L<HTTP::Lite>.  It supports
-  proxies (currently only non-authenticating ones) and redirection.  It
-  also correctly resumes after EINTR.
+  proxies and redirection.  It also correctly resumes after EINTR.
+  
+  If L<IO::Socket::IP> 0.25 or later is installed, HTTP::Tiny will use it instead
+  of L<IO::Socket::INET> for transparent support for both IPv4 and IPv6.
+  
+  Cookie support requires L<HTTP::CookieJar> or an equivalent class.
   
   =head1 METHODS
   
@@ -13263,6 +14673,12 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =item *
   
+  C<keep_alive>
+  
+  Whether to reuse the last connection (if for the same scheme, host and port) (defaults to 1)
+  
+  =item *
+  
   C<max_redirect>
   
   Maximum number of redirects allowed (defaults to 5)
@@ -13271,14 +14687,25 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   C<max_size>
   
-  Maximum response size (only when not using a data callback).  If defined,
-  responses larger than this will return an exception.
+  Maximum response size (only when not using a data callback).  If defined, responses larger than this will return an exception.
+  
+  =item *
+  
+  C<http_proxy>
+  
+  URL of a proxy server to use for HTTP connections (default is C<$ENV{http_proxy}> if set)
+  
+  =item *
+  
+  C<https_proxy>
+  
+  URL of a proxy server to use for HTTPS connections (default is C<$ENV{https_proxy}> if set)
   
   =item *
   
   C<proxy>
   
-  URL of a proxy server to use (default is C<$ENV{http_proxy}> if set)
+  URL of a generic proxy server for both HTTP and HTTPS connections (default is C<$ENV{all_proxy}> if set)
   
   =item *
   
@@ -13311,6 +14738,12 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   pseudo-HTTP status code of 599 and a reason of "Internal Exception". The
   content field in the response will contain the text of the exception.
   
+  The C<keep_alive> parameter enables a persistent connection, but only to a
+  single destination scheme, host and port.  Also, if any connection-relevant
+  attributes are modified, a persistent connection will be dropped.  If you want
+  persistent connections across multiple destinations, use multiple HTTP::Tiny
+  objects.
+  
   See L</SSL SUPPORT> for more on the C<verify_SSL> and C<SSL_options> attributes.
   
   =head2 get|head|put|post|delete
@@ -13332,7 +14765,9 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   This method executes a C<POST> request and sends the key/value pairs from a
   form data hash or array reference to the given URL with a C<content-type> of
-  C<application/x-www-form-urlencoded>.  See documentation for the
+  C<application/x-www-form-urlencoded>.  If data is provided as an array
+  reference, the order is preserved; if provided as a hash reference, the terms
+  are sorted on key and value for consistency.  See documentation for the
   C<www_form_urlencode> method for details on the encoding.
   
   The URL must have unsafe characters escaped and international domain names
@@ -13376,6 +14811,11 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   redirected request.) For example:
   
       $http->request('GET', 'http://Aladdin:open sesame@example.com/');
+  
+  If the "user:password" stanza contains reserved characters, they must
+  be percent-escaped:
+  
+      $http->request('GET', 'http://john%40example.com:password@example.com/');
   
   A hashref of options may be appended to modify the request.
   
@@ -13489,28 +14929,32 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   into a C<x-www-form-urlencoded> string.  The keys and values from the data
   reference will be UTF-8 encoded and escaped per RFC 3986.  If a value is an
   array reference, the key will be repeated with each of the values of the array
-  reference.  The key/value pairs in the resulting string will be sorted by key
-  and value.
+  reference.  If data is provided as a hash reference, the key/value pairs in the
+  resulting string will be sorted by key and value for consistent ordering.
   
-  =for Pod::Coverage agent
+  =for Pod::Coverage SSL_options
+  agent
   cookie_jar
   default_headers
+  http_proxy
+  https_proxy
+  keep_alive
   local_address
   max_redirect
   max_size
-  proxy
   no_proxy
+  proxy
   timeout
   verify_SSL
-  SSL_options
   
   =head1 SSL SUPPORT
   
   Direct C<https> connections are supported only if L<IO::Socket::SSL> 1.56 or
   greater and L<Net::SSLeay> 1.49 or greater are installed. An exception will be
   thrown if a new enough versions of these modules not installed or if the SSL
-  encryption fails. There is no support for C<https> connections via proxy (i.e.
-  RFC 2817).
+  encryption fails. An C<https> connection may be made via an C<http> proxy that
+  supports the CONNECT command (i.e. RFC 2817).  You may not proxy C<https> via
+  a proxy that itself requires C<https> to communicate.
   
   SSL provides two distinct capabilities:
   
@@ -13587,6 +15031,43 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   cipher used for the SSL connection. See L<IO::Socket::SSL> documentation for
   details.
   
+  =head1 PROXY SUPPORT
+  
+  HTTP::Tiny can proxy both C<http> and C<https> requests.  Only Basic proxy
+  authorization is supported and it must be provided as part of the proxy URL:
+  C<http://user:pass@proxy.example.com/>.
+  
+  HTTP::Tiny supports the following proxy environment variables:
+  
+  =over 4
+  
+  =item *
+  
+  http_proxy
+  
+  =item *
+  
+  https_proxy or HTTPS_PROXY
+  
+  =item *
+  
+  all_proxy or ALL_PROXY
+  
+  =back
+  
+  Tunnelling C<https> over an C<http> proxy using the CONNECT method is
+  supported.  If your proxy uses C<https> itself, you can not tunnel C<https>
+  over it.
+  
+  Be warned that proxying an C<https> connection opens you to the risk of a
+  man-in-the-middle attack by the proxy server.
+  
+  The C<no_proxy> environment variable is supported in the format of a
+  comma-separated list of domain extensions proxy should not be used for.
+  
+  Proxy arguments passed to C<new> will override their corresponding
+  environment variables.
+  
   =head1 LIMITATIONS
   
   HTTP::Tiny is I<conditionally compliant> with the
@@ -13620,28 +15101,6 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =item *
   
-  Persistent connections are not supported.  The C<Connection> header will
-  always be set to C<close>.
-  
-  =item *
-  
-  Cookie support requires L<HTTP::CookieJar> or an equivalent class.
-  
-  =item *
-  
-  Only the C<http_proxy> environment variable is supported in the format
-  C<http://HOST:PORT/>.  If a C<proxy> argument is passed to C<new> (including
-  undef), then the C<http_proxy> environment variable is ignored.
-  
-  =item *
-  
-  C<no_proxy> environment variable is supported in the format comma-separated
-  list of domain extensions proxy should not be used for.  If a C<no_proxy>
-  argument is passed to C<new>, then the C<no_proxy> environment variable is
-  ignored.
-  
-  =item *
-  
   There is no provision for delaying a request body using an C<Expect> header.
   Unexpected C<1XX> responses are silently ignored as per the specification.
   
@@ -13653,15 +15112,19 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   There is no support for a Request-URI of '*' for the 'OPTIONS' request.
   
-  =item *
-  
-  There is no support for IPv6 of any kind.
-  
   =back
+  
+  Despite the limitations listed above, HTTP::Tiny is considered
+  feature-complete.  New feature requests should be directed to
+  L<HTTP::Tiny::UA>.
   
   =head1 SEE ALSO
   
   =over 4
+  
+  =item *
+  
+  L<HTTP::Tiny::UA> - Higher level UA features for HTTP::Tiny
   
   =item *
   
@@ -13670,6 +15133,10 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   =item *
   
   L<HTTP::Tiny::Mech> - Wrap L<WWW::Mechanize> instance in HTTP::Tiny compatible interface
+  
+  =item *
+  
+  L<IO::Socket::IP> - Required for IPv6 support
   
   =item *
   
@@ -13706,7 +15173,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   L<https://github.com/chansen/p5-http-tiny>
   
-    git clone git://github.com/chansen/p5-http-tiny.git
+    git clone https://github.com/chansen/p5-http-tiny.git
   
   =head1 AUTHORS
   
@@ -13752,6 +15219,10 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =item *
   
+  Clinton Gormley <clint@traveljury.com>
+  
+  =item *
+  
   Craig Berry <cberry@cpan.org>
   
   =item *
@@ -13772,11 +15243,19 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =item *
   
+  Martin J. Evans <mjegh@ntlworld.com>
+  
+  =item *
+  
   Martin-Louis Bright <mlbright@gmail.com>
   
   =item *
   
   Mike Doherty <doherty@cpan.org>
+  
+  =item *
+  
+  Petr PÃ­saÅ™ <ppisar@redhat.com>
   
   =item *
   
@@ -13794,7 +15273,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =head1 COPYRIGHT AND LICENSE
   
-  This software is copyright (c) 2013 by Christian Hansen.
+  This software is copyright (c) 2014 by Christian Hansen.
   
   This is free software; you can redistribute it and/or modify it under
   the same terms as the Perl 5 programming language system itself.
@@ -13802,7 +15281,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   =cut
 HTTP_TINY
 
-$fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
+$fatpacked{"JSON/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP';
   package JSON::PP;
   
   # JSON-2.0
@@ -13816,7 +15295,7 @@ $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
   use B ();
   #use Devel::Peek;
   
-  $JSON::PP::VERSION = '2.27202';
+  $JSON::PP::VERSION = '2.27203';
   
   @JSON::PP::EXPORT = qw(encode_json decode_json from_json to_json);
   
@@ -15369,7 +16848,7 @@ $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
       $self->{incr_text} = substr( $self->{incr_text}, $p );
       $self->{incr_p} = 0;
   
-      return $obj or '';
+      return $obj || '';
   }
   
   
@@ -16604,7 +18083,7 @@ $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
   =cut
 JSON_PP
 
-$fatpacked{"JSON/PP/Boolean.pm"} = <<'JSON_PP_BOOLEAN';
+$fatpacked{"JSON/PP/Boolean.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP_BOOLEAN';
   =head1 NAME
   
   JSON::PP::Boolean - dummy module providing JSON::PP::Boolean
@@ -16633,7 +18112,7 @@ $fatpacked{"JSON/PP/Boolean.pm"} = <<'JSON_PP_BOOLEAN';
   
 JSON_PP_BOOLEAN
 
-$fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
+$fatpacked{"Module/CPANfile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_CPANFILE';
   package Module::CPANfile;
   use strict;
   use warnings;
@@ -16929,7 +18408,7 @@ $fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
   =cut
 MODULE_CPANFILE
 
-$fatpacked{"Module/CPANfile/Environment.pm"} = <<'MODULE_CPANFILE_ENVIRONMENT';
+$fatpacked{"Module/CPANfile/Environment.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_CPANFILE_ENVIRONMENT';
   package Module::CPANfile::Environment;
   use strict;
   use warnings;
@@ -16996,7 +18475,7 @@ $fatpacked{"Module/CPANfile/Environment.pm"} = <<'MODULE_CPANFILE_ENVIRONMENT';
   
 MODULE_CPANFILE_ENVIRONMENT
 
-$fatpacked{"Module/CPANfile/Result.pm"} = <<'MODULE_CPANFILE_RESULT';
+$fatpacked{"Module/CPANfile/Result.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_CPANFILE_RESULT';
   package Module::CPANfile::Result;
   use strict;
   
@@ -17092,7 +18571,7 @@ $fatpacked{"Module/CPANfile/Result.pm"} = <<'MODULE_CPANFILE_RESULT';
   1;
 MODULE_CPANFILE_RESULT
 
-$fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
+$fatpacked{"Module/Metadata.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_METADATA';
   # -*- mode: cperl; tab-width: 8; indent-tabs-mode: nil; basic-offset: 2 -*-
   # vim:ts=8:sw=2:et:sta:sts=2
   package Module::Metadata;
@@ -17105,8 +18584,9 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   # parrot future to look at other types of modules).
   
   use strict;
-  use vars qw($VERSION);
-  $VERSION = '1.000016';
+  use warnings;
+  
+  our $VERSION = '1.000019';
   $VERSION = eval $VERSION;
   
   use Carp qw/croak/;
@@ -17167,7 +18647,7 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
     ([\$*])         # sigil - $ or *
     (
       (             # optional leading package name
-        (?:::|\')?  # possibly starting like just :: (Ì  la $::VERSION)
+        (?:::|\')?  # possibly starting like just :: (a la $::VERSION)
         (?:\w+(?:::|\'))*  # Foo::Bar:: ...
       )?
       VERSION
@@ -17744,10 +19224,11 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
     # compiletime/runtime issues with local()
     my $vsub;
     $pn++; # everybody gets their own package
-    my $eval = qq{BEGIN { q#  Hide from _packages_inside()
+    my $eval = qq{BEGIN { my \$dummy = q#  Hide from _packages_inside()
       #; package Module::Metadata::_version::p$pn;
       use version;
       no strict;
+      no warnings;
   
         \$vsub = sub {
           local $sigil$var;
@@ -17756,6 +19237,8 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
           \$$var
         };
     }};
+  
+    $eval = $1 if $eval =~ m{^(.+)}s;
   
     local $^W;
     # Try to get the $VERSION
@@ -18107,66 +19590,67 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   
 MODULE_METADATA
 
-$fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
+$fatpacked{"Parse/CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PARSE_CPAN_META';
+  use 5.008001;
   use strict;
   package Parse::CPAN::Meta;
   # ABSTRACT: Parse META.yml and META.json CPAN metadata files
-  our $VERSION = '1.4407'; # VERSION
+  our $VERSION = '1.4414'; # VERSION
   
+  use Exporter;
   use Carp 'croak';
   
-  # UTF Support?
-  sub HAVE_UTF8 () { $] >= 5.007003 }
-  sub IO_LAYER () { $] >= 5.008001 ? ":utf8" : "" }  
-  
-  BEGIN {
-  	if ( HAVE_UTF8 ) {
-  		# The string eval helps hide this from Test::MinimumVersion
-  		eval "require utf8;";
-  		die "Failed to load UTF-8 support" if $@;
-  	}
-  
-  	# Class structure
-  	require 5.004;
-  	require Exporter;
-  	@Parse::CPAN::Meta::ISA       = qw{ Exporter      };
-  	@Parse::CPAN::Meta::EXPORT_OK = qw{ Load LoadFile };
-  }
+  our @ISA = qw/Exporter/;
+  our @EXPORT_OK = qw/Load LoadFile/;
   
   sub load_file {
     my ($class, $filename) = @_;
   
+    my $meta = _slurp($filename);
+  
     if ($filename =~ /\.ya?ml$/) {
-      return $class->load_yaml_string(_slurp($filename));
+      return $class->load_yaml_string($meta);
     }
-  
-    if ($filename =~ /\.json$/) {
-      return $class->load_json_string(_slurp($filename));
+    elsif ($filename =~ /\.json$/) {
+      return $class->load_json_string($meta);
     }
+    else {
+      $class->load_string($meta); # try to detect yaml/json
+    }
+  }
   
-    croak("file type cannot be determined by filename");
+  sub load_string {
+    my ($class, $string) = @_;
+    if ( $string =~ /^---/ ) { # looks like YAML
+      return $class->load_yaml_string($string);
+    }
+    elsif ( $string =~ /^\s*\{/ ) { # looks like JSON
+      return $class->load_json_string($string);
+    }
+    else { # maybe doc-marker-free YAML
+      return $class->load_yaml_string($string);
+    }
   }
   
   sub load_yaml_string {
     my ($class, $string) = @_;
     my $backend = $class->yaml_backend();
     my $data = eval { no strict 'refs'; &{"$backend\::Load"}($string) };
-    if ( $@ ) { 
-      croak $backend->can('errstr') ? $backend->errstr : $@
-    }
+    croak $@ if $@;
     return $data || {}; # in case document was valid but empty
   }
   
   sub load_json_string {
     my ($class, $string) = @_;
-    return $class->json_backend()->new->decode($string);
+    my $data = eval { $class->json_backend()->new->decode($string) };
+    croak $@ if $@;
+    return $data || {};
   }
   
   sub yaml_backend {
-    local $Module::Load::Conditional::CHECK_INC_HASH = 1;
     if (! defined $ENV{PERL_YAML_BACKEND} ) {
-      _can_load( 'CPAN::Meta::YAML', 0.002 )
-        or croak "CPAN::Meta::YAML 0.002 is not available\n";
+      _can_load( 'CPAN::Meta::YAML', 0.011 )
+        or croak "CPAN::Meta::YAML 0.011 is not available\n";
       return "CPAN::Meta::YAML";
     }
     else {
@@ -18180,7 +19664,6 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   }
   
   sub json_backend {
-    local $Module::Load::Conditional::CHECK_INC_HASH = 1;
     if (! $ENV{PERL_JSON_BACKEND} or $ENV{PERL_JSON_BACKEND} eq 'JSON::PP') {
       _can_load( 'JSON::PP' => 2.27103 )
         or croak "JSON::PP 2.27103 is not available\n";
@@ -18195,9 +19678,12 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   }
   
   sub _slurp {
-    open my $fh, "<" . IO_LAYER, "$_[0]"
+    require Encode;
+    open my $fh, "<:raw", "$_[0]" ## no critic
       or die "can't open $_[0] for reading: $!";
-    return do { local $/; <$fh> };
+    my $content = do { local $/; <$fh> };
+    $content = Encode::decode('UTF-8', $content, Encode::PERLQQ());
+    return $content;
   }
     
   sub _can_load {
@@ -18218,17 +19704,14 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   # Kept for backwards compatibility only
   # Create an object from a file
   sub LoadFile ($) {
-    require CPAN::Meta::YAML;
-    my $object = CPAN::Meta::YAML::LoadFile(shift)
-      or die CPAN::Meta::YAML->errstr;
-    return $object;
+    return Load(_slurp(shift));
   }
   
   # Parse a document from a string.
   sub Load ($) {
     require CPAN::Meta::YAML;
-    my $object = CPAN::Meta::YAML::Load(shift)
-      or die CPAN::Meta::YAML->errstr;
+    my $object = eval { CPAN::Meta::YAML::Load(shift) };
+    croak $@ if $@;
     return $object;
   }
   
@@ -18238,7 +19721,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =pod
   
-  =encoding utf-8
+  =encoding UTF-8
   
   =head1 NAME
   
@@ -18246,7 +19729,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =head1 VERSION
   
-  version 1.4407
+  version 1.4414
   
   =head1 SYNOPSIS
   
@@ -18290,7 +19773,12 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   Note that META files are expected to be in UTF-8 encoding, only.  When
   converted string data, it must first be decoded from UTF-8.
   
-  =for Pod::Coverage HAVE_UTF8 IO_LAYER
+  =begin Pod::Coverage
+  
+  
+  
+  
+  =end Pod::Coverage
   
   =head1 METHODS
   
@@ -18301,8 +19789,8 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
     my $metadata_structure = Parse::CPAN::Meta->load_file('META.yml');
   
   This method will read the named file and deserialize it to a data structure,
-  determining whether it should be JSON or YAML based on the filename.  On
-  Perl 5.8.1 or later, the file will be read using the ":utf8" IO layer.
+  determining whether it should be JSON or YAML based on the filename.
+  The file will be read using the ":utf8" IO layer.
   
   =head2 load_yaml_string
   
@@ -18320,6 +19808,13 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   This method deserializes the given string of JSON and the result.  
   If the source was UTF-8 encoded, the string must be decoded before calling
   C<load_json_string>.
+  
+  =head2 load_string
+  
+    my $metadata_structure = Parse::CPAN::Meta->load_string($some_string);
+  
+  If you don't know whether a string contains YAML or JSON data, this method
+  will use some heuristics and guess.  If it can't tell, it assumes YAML.
   
   =head2 yaml_backend
   
@@ -18339,8 +19834,8 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =head1 FUNCTIONS
   
-  For maintenance clarity, no functions are exported.  These functions are
-  available for backwards compatibility only and are best avoided in favor of
+  For maintenance clarity, no functions are exported by default.  These functions
+  are available for backwards compatibility only and are best avoided in favor of
   C<load_file>.
   
   =head2 Load
@@ -18413,6 +19908,10 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =item *
   
+  Graham Knop <haarg@haarg.org>
+  
+  =item *
+  
   Joshua ben Jore <jjore@cpan.org>
   
   =item *
@@ -18421,17 +19920,17 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =item *
   
-  Ricardo SIGNES <rjbs@cpan.org>
+  Ricardo Signes <rjbs@cpan.org>
   
   =item *
   
-  Steffen Müller <smueller@cpan.org>
+  Steffen Mueller <smueller@cpan.org>
   
   =back
   
   =head1 COPYRIGHT AND LICENSE
   
-  This software is copyright (c) 2013 by Adam Kennedy and Contributors.
+  This software is copyright (c) 2014 by Adam Kennedy and Contributors.
   
   This is free software; you can redistribute it and/or modify it under
   the same terms as the Perl 5 programming language system itself.
@@ -18439,7 +19938,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   =cut
 PARSE_CPAN_META
 
-$fatpacked{"String/ShellQuote.pm"} = <<'STRING_SHELLQUOTE';
+$fatpacked{"String/ShellQuote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'STRING_SHELLQUOTE';
   # $Id: ShellQuote.pm,v 1.11 2010-06-11 20:08:57 roderick Exp $
   #
   # Copyright (c) 1997 Roderick Schertler.  All rights reserved.  This
@@ -18638,7 +20137,7 @@ $fatpacked{"String/ShellQuote.pm"} = <<'STRING_SHELLQUOTE';
   =cut
 STRING_SHELLQUOTE
 
-$fatpacked{"aliased.pm"} = <<'ALIASED';
+$fatpacked{"aliased.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'ALIASED';
   package aliased;
   
   our $VERSION = '0.31';
@@ -18970,7 +20469,7 @@ $fatpacked{"aliased.pm"} = <<'ALIASED';
   =cut
 ALIASED
 
-$fatpacked{"lib/core/only.pm"} = <<'LIB_CORE_ONLY';
+$fatpacked{"lib/core/only.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'LIB_CORE_ONLY';
   package lib::core::only;
   
   use strict;
@@ -18992,12 +20491,17 @@ $fatpacked{"lib/core/only.pm"} = <<'LIB_CORE_ONLY';
   
   To get only the core directories plus the ones for the local::lib in scope:
   
-    $ perl -Mlib::core::only -Mlocal::lib=~/perl5 myscript.pl
+    $ perl -mlocal::lib -Mlib::core::only -Mlocal::lib=~/perl5 myscript.pl
   
   To attempt to do a self-contained build (but note this will not reliably
   propagate into subprocesses, see the CAVEATS below):
   
-    $ PERL5OPT='-Mlib::core::only -Mlocal::lib=~/perl5' cpan
+    $ PERL5OPT='-mlocal::lib -Mlib::core::only -Mlocal::lib=~/perl5' cpan
+  
+  Please note that it is necessary to use C<local::lib> twice for this to work.
+  First so that C<lib::core::only> doesn't prevent C<local::lib> from loading
+  (it's not currently in core) and then again after C<lib::core::only> so that
+  the local paths are not removed.
   
   =head1 DESCRIPTION
   
@@ -19068,39 +20572,31 @@ $fatpacked{"lib/core/only.pm"} = <<'LIB_CORE_ONLY';
   1;
 LIB_CORE_ONLY
 
-$fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
+$fatpacked{"local/lib.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'LOCAL_LIB';
+  package local::lib;
+  use 5.006;
   use strict;
   use warnings;
-  
-  package local::lib;
-  
-  use 5.008001; # probably works with earlier versions but I'm not supporting them
-                # (patches would, of course, be welcome)
-  
-  use File::Spec ();
-  use File::Path ();
   use Config;
+  use File::Spec ();
   
-  our $VERSION = '1.008011'; # 1.8.11
-  
-  our @KNOWN_FLAGS = qw(--self-contained --deactivate --deactivate-all);
-  
-  sub DEACTIVATE_ONE () { 1 }
-  sub DEACTIVATE_ALL () { 2 }
-  
-  sub INTERPOLATE_ENV () { 1 }
-  sub LITERAL_ENV     () { 0 }
+  our $VERSION = '2.000008'; # 2.0.8
+  $VERSION = eval $VERSION;
   
   sub import {
     my ($class, @args) = @_;
+    push @args, @ARGV
+      if $0 eq '-';
   
-    # Remember what PERL5LIB was when we started
-    my $perl5lib = $ENV{PERL5LIB} || '';
+    my @steps;
+    my %opts;
+    my $shelltype;
   
-    my %arg_store;
-    for my $arg (@args) {
+    while (@args) {
+      my $arg = shift @args;
       # check for lethal dash first to stop processing before causing problems
-      if ($arg =~ /âˆ’/) {
+      # the fancy dash is U+2212 or \xE2\x88\x92
+      if ($arg =~ /\xE2\x88\x92/ or $arg =~ /âˆ’/) {
         die <<'DEATH';
   WHOA THERE! It looks like you've got some fancy dashes in your commandline!
   These are *not* the traditional -- dashes that software recognizes. You
@@ -19110,38 +20606,438 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   dashes with normal minus signs.
   DEATH
       }
-      elsif(grep { $arg eq $_ } @KNOWN_FLAGS) {
-        (my $flag = $arg) =~ s/--//;
-        $arg_store{$flag} = 1;
+      elsif ($arg eq '--self-contained') {
+        die <<'DEATH';
+  FATAL: The local::lib --self-contained flag has never worked reliably and the
+  original author, Mark Stosberg, was unable or unwilling to maintain it. As
+  such, this flag has been removed from the local::lib codebase in order to
+  prevent misunderstandings and potentially broken builds. The local::lib authors
+  recommend that you look at the lib::core::only module shipped with this
+  distribution in order to create a more robust environment that is equivalent to
+  what --self-contained provided (although quite possibly not what you originally
+  thought it provided due to the poor quality of the documentation, for which we
+  apologise).
+  DEATH
       }
-      elsif($arg =~ /^--/) {
+      elsif( $arg =~ /^--deactivate(?:=(.*))?$/ ) {
+        my $path = defined $1 ? $1 : shift @args;
+        push @steps, ['deactivate', $path];
+      }
+      elsif ( $arg eq '--deactivate-all' ) {
+        push @steps, ['deactivate_all'];
+      }
+      elsif ( $arg =~ /^--shelltype(?:=(.*))?$/ ) {
+        $shelltype = defined $1 ? $1 : shift @args;
+      }
+      elsif ( $arg eq '--no-create' ) {
+        $opts{no_create} = 1;
+      }
+      elsif ( $arg =~ /^--/ ) {
         die "Unknown import argument: $arg";
       }
       else {
-        # assume that what's left is a path
-        $arg_store{path} = $arg;
+        push @steps, ['activate', $arg];
       }
     }
-  
-    if($arg_store{'self-contained'}) {
-      die "FATAL: The local::lib --self-contained flag has never worked reliably and the original author, Mark Stosberg, was unable or unwilling to maintain it. As such, this flag has been removed from the local::lib codebase in order to prevent misunderstandings and potentially broken builds. The local::lib authors recommend that you look at the lib::core::only module shipped with this distribution in order to create a more robust environment that is equivalent to what --self-contained provided (although quite possibly not what you originally thought it provided due to the poor quality of the documentation, for which we apologise).\n";
+    if (!@steps) {
+      push @steps, ['activate', undef];
     }
   
-    my $deactivating = 0;
-    if ($arg_store{deactivate}) {
-      $deactivating = DEACTIVATE_ONE;
-    }
-    if ($arg_store{'deactivate-all'}) {
-      $deactivating = DEACTIVATE_ALL;
+    my $self = $class->new(%opts);
+  
+    for (@steps) {
+      my ($method, @args) = @$_;
+      $self = $self->$method(@args);
     }
   
-    $arg_store{path} = $class->resolve_path($arg_store{path});
-    $class->setup_local_lib_for($arg_store{path}, $deactivating);
-  
-    for (@INC) { # Untaint @INC
-      next if ref; # Skip entry if it is an ARRAY, CODE, blessed, etc.
-      m/(.*)/ and $_ = $1;
+    if ($0 eq '-') {
+      print $self->environment_vars_string($shelltype);
+      exit 0;
     }
+    else {
+      $self->setup_local_lib;
+    }
+  }
+  
+  sub new {
+    my $class = shift;
+    bless {@_}, $class;
+  }
+  
+  sub clone {
+    my $self = shift;
+    bless {%$self, @_}, ref $self;
+  }
+  
+  sub inc { $_[0]->{inc}     ||= \@INC }
+  sub libs { $_[0]->{libs}   ||= [ \'PERL5LIB' ] }
+  sub bins { $_[0]->{bins}   ||= [ \'PATH' ] }
+  sub roots { $_[0]->{roots} ||= [ \'PERL_LOCAL_LIB_ROOT' ] }
+  sub extra { $_[0]->{extra} ||= {} }
+  sub no_create { $_[0]->{no_create} }
+  
+  my $_archname = $Config{archname};
+  my $_version  = $Config{version};
+  my @_inc_version_list = reverse split / /, $Config{inc_version_list};
+  my $_path_sep = $Config{path_sep};
+  
+  sub _as_list {
+    my $list = shift;
+    grep length, map {
+      !(ref $_ && ref $_ eq 'SCALAR') ? $_ : (
+        defined $ENV{$$_} ? split(/\Q$_path_sep/, $ENV{$$_})
+                          : ()
+      )
+    } ref $list ? @$list : $list;
+  }
+  sub _remove_from {
+    my ($list, @remove) = @_;
+    return @$list
+      if !@remove;
+    my %remove = map { $_ => 1 } @remove;
+    grep !$remove{$_}, _as_list($list);
+  }
+  
+  my @_lib_subdirs = (
+    [$_version, $_archname],
+    [$_version],
+    [$_archname],
+    (@_inc_version_list ? \@_inc_version_list : ()),
+    [],
+  );
+  
+  sub install_base_bin_path {
+    my ($class, $path) = @_;
+    return File::Spec->catdir($path, 'bin');
+  }
+  sub install_base_perl_path {
+    my ($class, $path) = @_;
+    return File::Spec->catdir($path, 'lib', 'perl5');
+  }
+  sub install_base_arch_path {
+    my ($class, $path) = @_;
+    File::Spec->catdir($class->install_base_perl_path($path), $_archname);
+  }
+  
+  sub lib_paths_for {
+    my ($class, $path) = @_;
+    my $base = $class->install_base_perl_path($path);
+    return map { File::Spec->catdir($base, @$_) } @_lib_subdirs;
+  }
+  
+  sub _mm_escape_path {
+    my $path = shift;
+    $path =~ s/\\/\\\\\\\\/g;
+    if ($path =~ s/ /\\ /g) {
+      $path = qq{"\\"$path\\""};
+    }
+    return $path;
+  }
+  
+  sub _mb_escape_path {
+    my $path = shift;
+    $path =~ s/\\/\\\\/g;
+    return qq{"$path"};
+  }
+  
+  sub installer_options_for {
+    my ($class, $path) = @_;
+    return (
+      PERL_MM_OPT =>
+        defined $path ? "INSTALL_BASE="._mm_escape_path($path) : undef,
+      PERL_MB_OPT =>
+        defined $path ? "--install_base "._mb_escape_path($path) : undef,
+    );
+  }
+  
+  sub active_paths {
+    my ($self) = @_;
+    $self = ref $self ? $self : $self->new;
+  
+    return grep {
+      # screen out entries that aren't actually reflected in @INC
+      my $active_ll = $self->install_base_perl_path($_);
+      grep { $_ eq $active_ll } @{$self->inc};
+    } _as_list($self->roots);
+  }
+  
+  
+  sub deactivate {
+    my ($self, $path) = @_;
+    $self = $self->new unless ref $self;
+    $path = $self->resolve_path($path);
+    $path = $self->normalize_path($path);
+  
+    my @active_lls = $self->active_paths;
+  
+    if (!grep { $_ eq $path } @active_lls) {
+      warn "Tried to deactivate inactive local::lib '$path'\n";
+      return $self;
+    }
+  
+    my %args = (
+      bins  => [ _remove_from($self->bins,
+        $self->install_base_bin_path($path)) ],
+      libs  => [ _remove_from($self->libs,
+        $self->install_base_perl_path($path)) ],
+      inc   => [ _remove_from($self->inc,
+        $self->lib_paths_for($path)) ],
+      roots => [ _remove_from($self->roots, $path) ],
+    );
+  
+    $args{extra} = { $self->installer_options_for($args{roots}[0]) };
+  
+    $self->clone(%args);
+  }
+  
+  sub deactivate_all {
+    my ($self) = @_;
+    $self = $self->new unless ref $self;
+  
+    my @active_lls = $self->active_paths;
+  
+    my %args;
+    if (@active_lls) {
+      %args = (
+        bins => [ _remove_from($self->bins,
+          map $self->install_base_bin_path($_), @active_lls) ],
+        libs => [ _remove_from($self->libs,
+          map $self->install_base_perl_path($_), @active_lls) ],
+        inc => [ _remove_from($self->inc,
+          map $self->lib_paths_for($_), @active_lls) ],
+        roots => [ _remove_from($self->roots, @active_lls) ],
+      );
+    }
+  
+    $args{extra} = { $self->installer_options_for(undef) };
+  
+    $self->clone(%args);
+  }
+  
+  sub activate {
+    my ($self, $path) = @_;
+    $self = $self->new unless ref $self;
+    $path = $self->resolve_path($path);
+    $self->ensure_dir_structure_for($path)
+      unless $self->no_create;
+  
+    $path = $self->normalize_path($path);
+  
+    my @active_lls = $self->active_paths;
+  
+    if (grep { $_ eq $path } @active_lls[1 .. $#active_lls]) {
+      $self = $self->deactivate($path);
+    }
+  
+    my %args;
+    if (!@active_lls || $active_lls[0] ne $path) {
+      %args = (
+        bins  => [ $self->install_base_bin_path($path), @{$self->bins} ],
+        libs  => [ $self->install_base_perl_path($path), @{$self->libs} ],
+        inc   => [ $self->lib_paths_for($path), @{$self->inc} ],
+        roots => [ $path, @{$self->roots} ],
+      );
+    }
+  
+    $args{extra} = { $self->installer_options_for($path) };
+  
+    $self->clone(%args);
+  }
+  
+  sub normalize_path {
+    my ($self, $path) = @_;
+    $path = ( Win32::GetShortPathName($path) || $path )
+      if $^O eq 'MSWin32';
+    return $path;
+  }
+  
+  sub build_environment_vars_for {
+    my $self = $_[0]->new->activate($_[1]);
+    $self->build_environment_vars;
+  }
+  sub build_environment_vars {
+    my $self = shift;
+    (
+      PATH                => join($_path_sep, _as_list($self->bins)),
+      PERL5LIB            => join($_path_sep, _as_list($self->libs)),
+      PERL_LOCAL_LIB_ROOT => join($_path_sep, _as_list($self->roots)),
+      %{$self->extra},
+    );
+  }
+  
+  sub setup_local_lib_for {
+    my $self = $_[0]->new->activate($_[1]);
+    $self->setup_local_lib;
+  }
+  
+  sub setup_local_lib {
+    my $self = shift;
+    $self->setup_env_hash;
+    @INC = @{$self->inc};
+  }
+  
+  sub setup_env_hash_for {
+    my $self = $_[0]->new->activate($_[1]);
+    $self->setup_env_hash;
+  }
+  sub setup_env_hash {
+    my $self = shift;
+    my %env = $self->build_environment_vars;
+    for my $key (keys %env) {
+      if (defined $env{$key}) {
+        $ENV{$key} = $env{$key};
+      }
+      else {
+        delete $ENV{$key};
+      }
+    }
+  }
+  
+  sub print_environment_vars_for {
+    print $_[0]->environment_vars_string_for(@_[1..$#_]);
+  }
+  
+  sub environment_vars_string_for {
+    my $self = $_[0]->new->activate($_[1]);
+    $self->environment_vars_string;
+  }
+  sub environment_vars_string {
+    my ($self, $shelltype) = @_;
+  
+    $shelltype ||= $self->guess_shelltype;
+  
+    my $build_method = "build_${shelltype}_env_declaration";
+  
+    my $extra = $self->extra;
+    my @envs = (
+      PATH                => $self->bins,
+      PERL5LIB            => $self->libs,
+      PERL_LOCAL_LIB_ROOT => $self->roots,
+      map { $_ => $extra->{$_} } sort keys %$extra,
+    );
+    my $out = '';
+    while (@envs) {
+      my ($name, $value) = (shift(@envs), shift(@envs));
+      if (
+          ref $value
+          && @$value == 1
+          && ref $value->[0]
+          && ref $value->[0] eq 'SCALAR'
+          && ${$value->[0]} eq $name) {
+        next;
+      }
+      if (
+          !ref $value
+          and defined $value
+            ? (defined $ENV{$name} && $value eq $ENV{$name})
+            : !defined $ENV{$name}
+      ) {
+        next;
+      }
+      $out .= $self->$build_method($name, $value);
+    }
+    my $wrap_method = "wrap_${shelltype}_output";
+    if ($self->can($wrap_method)) {
+      return $self->$wrap_method($out);
+    }
+    return $out;
+  }
+  
+  sub build_bourne_env_declaration {
+    my ($class, $name, $args) = @_;
+    my $value = $class->_interpolate($args, '$%s', '"', '\\%s');
+  
+    if (!defined $value) {
+      return qq{unset $name;\n};
+    }
+  
+    $value =~ s/(^|\G|$_path_sep)\$$name$_path_sep/$1\$$name\${$name+$_path_sep}/g;
+    $value =~ s/$_path_sep\$$name$/\${$name+$_path_sep}\$$name/;
+  
+    qq{${name}="$value"; export ${name};\n}
+  }
+  
+  sub build_csh_env_declaration {
+    my ($class, $name, $args) = @_;
+    my ($value, @vars) = $class->_interpolate($args, '$%s', '"', '"\\%s"');
+    if (!defined $value) {
+      return qq{unsetenv $name;\n};
+    }
+  
+    my $out = '';
+    for my $var (@vars) {
+      $out .= qq{if ! \$?$name setenv $name '';\n};
+    }
+  
+    my $value_without = $value;
+    if ($value_without =~ s/(?:^|$_path_sep)\$$name(?:$_path_sep|$)//g) {
+      $out .= qq{if "\$$name" != '' setenv $name "$value";\n};
+      $out .= qq{if "\$$name" == '' };
+    }
+    $out .= qq{setenv $name "$value_without";\n};
+    return $out;
+  }
+  
+  sub build_cmd_env_declaration {
+    my ($class, $name, $args) = @_;
+    my $value = $class->_interpolate($args, '%%%s%%', qr([()!^"<>&|]), '^%s');
+    if (!$value) {
+      return qq{\@set $name=\n};
+    }
+  
+    my $out = '';
+    my $value_without = $value;
+    if ($value_without =~ s/(?:^|$_path_sep)%$name%(?:$_path_sep|$)//g) {
+      $out .= qq{\@if not "%$name%"=="" set $name=$value\n};
+      $out .= qq{\@if "%$name%"=="" };
+    }
+    $out .= qq{\@set $name=$value_without\n};
+    return $out;
+  }
+  
+  sub build_powershell_env_declaration {
+    my ($class, $name, $args) = @_;
+    my $value = $class->_interpolate($args, '$env:%s', '"', '`%s');
+  
+    if (!$value) {
+      return qq{Remove-Item -ErrorAction 0 Env:\\$name;\n};
+    }
+  
+    my $maybe_path_sep = qq{\$(if("\$env:$name"-eq""){""}else{"$_path_sep"})};
+    $value =~ s/(^|\G|$_path_sep)\$env:$name$_path_sep/$1\$env:$name"+$maybe_path_sep+"/g;
+    $value =~ s/$_path_sep\$env:$name$/"+$maybe_path_sep+\$env:$name+"/;
+  
+    qq{\$env:$name = \$("$value");\n};
+  }
+  sub wrap_powershell_output {
+    my ($class, $out) = @_;
+    return $out || " \n";
+  }
+  
+  sub build_fish_env_declaration {
+    my ($class, $name, $args) = @_;
+    my $value = $class->_interpolate($args, '$%s', '"', '\\%s');
+    if (!defined $value) {
+      return qq{set -e $name;\n};
+    }
+    $value =~ s/$_path_sep/ /g;
+    qq{set -x $name $value;\n};
+  }
+  
+  sub _interpolate {
+    my ($class, $args, $var_pat, $escape, $escape_pat) = @_;
+    return
+      unless defined $args;
+    my @args = ref $args ? @$args : $args;
+    return
+      unless @args;
+    my @vars = map { $$_ } grep { ref $_ eq 'SCALAR' } @args;
+    my $string = join $_path_sep, map {
+      ref $_ eq 'SCALAR' ? sprintf($var_pat, $$_) : do {
+        s/($escape)/sprintf($escape_pat, $1)/ge; $_;
+      };
+    } @args;
+    return wantarray ? ($string, \@vars) : $string;
   }
   
   sub pipeline;
@@ -19163,32 +21059,16 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
     }
   }
   
-  =begin testing
-  
-  #:: test pipeline
-  
-  package local::lib;
-  
-  { package Foo; sub foo { -$_[1] } sub bar { $_[1]+2 } sub baz { $_[1]+3 } }
-  my $foo = bless({}, 'Foo');                                                 
-  Test::More::ok($foo->${pipeline qw(foo bar baz)}(10) == -15);
-  
-  =end testing
-  
-  =cut
-  
-  sub _uniq {
-      my %seen;
-      grep { ! $seen{$_}++ } @_;
-  }
-  
   sub resolve_path {
     my ($class, $path) = @_;
-    $class->${pipeline qw(
+  
+    $path = $class->${pipeline qw(
       resolve_relative_path
       resolve_home_path
       resolve_empty_path
     )}($path);
+  
+    $path;
   }
   
   sub resolve_empty_path {
@@ -19200,48 +21080,17 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
     }
   }
   
-  =begin testing
-  
-  #:: test classmethod setup
-  
-  my $c = 'local::lib';
-  
-  =end testing
-  
-  =begin testing
-  
-  #:: test classmethod
-  
-  is($c->resolve_empty_path, '~/perl5');
-  is($c->resolve_empty_path('foo'), 'foo');
-  
-  =end testing
-  
-  =cut
-  
   sub resolve_home_path {
     my ($class, $path) = @_;
-    return $path unless ($path =~ /^~/);
-    my ($user) = ($path =~ /^~([^\/]+)/); # can assume ^~ so undef for 'us'
-    my $tried_file_homedir;
+    $path =~ /^~([^\/]*)/ or return $path;
+    my $user = $1;
     my $homedir = do {
-      if (eval { require File::HomeDir } && $File::HomeDir::VERSION >= 0.65) {
-        $tried_file_homedir = 1;
-        if (defined $user) {
-          File::HomeDir->users_home($user);
-        } else {
-          File::HomeDir->my_home;
-        }
-      } else {
-        if (defined $user) {
-          (getpwnam $user)[7];
-        } else {
-          if (defined $ENV{HOME}) {
-            $ENV{HOME};
-          } else {
-            (getpwuid $<)[7];
-          }
-        }
+      if (! length($user) && defined $ENV{HOME}) {
+        $ENV{HOME};
+      }
+      else {
+        require File::Glob;
+        File::Glob::bsd_glob("~$user", File::Glob::GLOB_TILDE());
       }
     };
     unless (defined $homedir) {
@@ -19249,7 +21098,6 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
       Carp::croak(
         "Couldn't resolve homedir for "
         .(defined $user ? $user : 'current user')
-        .($tried_file_homedir ? '' : ' - consider installing File::HomeDir')
       );
     }
     $path =~ s/^~[^\/]*/$homedir/;
@@ -19261,363 +21109,47 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
     $path = File::Spec->rel2abs($path);
   }
   
-  =begin testing
-  
-  #:: test classmethod
-  
-  local *File::Spec::rel2abs = sub { shift; 'FOO'.shift; };
-  is($c->resolve_relative_path('bar'),'FOObar');
-  
-  =end testing
-  
-  =cut
-  
-  sub setup_local_lib_for {
-    my ($class, $path, $deactivating) = @_;
-  
-    my $interpolate = LITERAL_ENV;
-    my @active_lls = $class->active_paths;
-  
-    $class->ensure_dir_structure_for($path);
-  
-    # On Win32 directories often contain spaces. But some parts of the CPAN
-    # toolchain don't like that. To avoid this, GetShortPathName() gives us
-    # an alternate representation that has none.
-    # This only works if the directory already exists.
-    $path = Win32::GetShortPathName($path) if $^O eq 'MSWin32';
-  
-    if (! $deactivating) {
-      if (@active_lls && $active_lls[-1] eq $path) {
-        exit 0 if $0 eq '-';
-        return; # Asked to add what's already at the top of the stack
-      } elsif (grep { $_ eq $path} @active_lls) {
-        # Asked to add a dir that's lower in the stack -- so we remove it from
-        # where it is, and then add it back at the top.
-        $class->setup_env_hash_for($path, DEACTIVATE_ONE);
-        # Which means we can no longer output "PERL5LIB=...:$PERL5LIB" stuff
-        # anymore because we're taking something *out*.
-        $interpolate = INTERPOLATE_ENV;
-      }
-    }
-  
-    if ($0 eq '-') {
-      $class->print_environment_vars_for($path, $deactivating, $interpolate);
-      exit 0;
-    } else {
-      $class->setup_env_hash_for($path, $deactivating);
-      my $arch_dir = $Config{archname};
-      @INC = _uniq(
-    (
-        # Inject $path/$archname for each path in PERL5LIB
-        map { ( File::Spec->catdir($_, $arch_dir), $_ ) }
-        split($Config{path_sep}, $ENV{PERL5LIB})
-    ),
-    @INC
-      );
-    }
-  }
-  
-  sub install_base_bin_path {
-    my ($class, $path) = @_;
-    File::Spec->catdir($path, 'bin');
-  }
-  
-  sub install_base_perl_path {
-    my ($class, $path) = @_;
-    File::Spec->catdir($path, 'lib', 'perl5');
-  }
-  
-  sub install_base_arch_path {
-    my ($class, $path) = @_;
-    File::Spec->catdir($class->install_base_perl_path($path), $Config{archname});
-  }
-  
   sub ensure_dir_structure_for {
     my ($class, $path) = @_;
     unless (-d $path) {
       warn "Attempting to create directory ${path}\n";
     }
-    File::Path::mkpath($path);
-    return
+    require File::Basename;
+    my @dirs;
+    while(!-d $path) {
+      push @dirs, $path;
+      $path = File::Basename::dirname($path);
+    }
+    mkdir $_ for reverse @dirs;
+    return;
   }
   
   sub guess_shelltype {
-    my $shellbin = 'sh';
-    if(defined $ENV{'SHELL'}) {
-        my @shell_bin_path_parts = File::Spec->splitpath($ENV{'SHELL'});
-        $shellbin = $shell_bin_path_parts[-1];
-    }
-    my $shelltype = do {
-        local $_ = $shellbin;
-        if(/csh/) {
-            'csh'
-        } else {
-            'bourne'
-        }
-    };
+    my $shellbin
+      = defined $ENV{SHELL}
+        ? ($ENV{SHELL} =~ /([\w.]+)$/)[-1]
+      : ( $^O eq 'MSWin32' && exists $ENV{'!EXITCODE'} )
+        ? 'bash'
+      : ( $^O eq 'MSWin32' && $ENV{PROMPT} && $ENV{COMSPEC} )
+        ? ($ENV{COMSPEC} =~ /([\w.]+)$/)[-1]
+      : ( $^O eq 'MSWin32' && !$ENV{PROMPT} )
+        ? 'powershell.exe'
+      : 'sh';
   
-    # Both Win32 and Cygwin have $ENV{COMSPEC} set.
-    if (defined $ENV{'COMSPEC'} && $^O ne 'cygwin') {
-        my @shell_bin_path_parts = File::Spec->splitpath($ENV{'COMSPEC'});
-        $shellbin = $shell_bin_path_parts[-1];
-           $shelltype = do {
-                   local $_ = $shellbin;
-                   if(/command\.com/) {
-                           'win32'
-                   } elsif(/cmd\.exe/) {
-                           'win32'
-                   } elsif(/4nt\.exe/) {
-                           'win32'
-                   } else {
-                           $shelltype
-                   }
-           };
-    }
-    return $shelltype;
-  }
-  
-  sub print_environment_vars_for {
-    my ($class, $path, $deactivating, $interpolate) = @_;
-    print $class->environment_vars_string_for($path, $deactivating, $interpolate);
-  }
-  
-  sub environment_vars_string_for {
-    my ($class, $path, $deactivating, $interpolate) = @_;
-    my @envs = $class->build_environment_vars_for($path, $deactivating, $interpolate);
-    my $out = '';
-  
-    # rather basic csh detection, goes on the assumption that something won't
-    # call itself csh unless it really is. also, default to bourne in the
-    # pathological situation where a user doesn't have $ENV{SHELL} defined.
-    # note also that shells with funny names, like zoid, are assumed to be
-    # bourne.
-  
-    my $shelltype = $class->guess_shelltype;
-  
-    while (@envs) {
-      my ($name, $value) = (shift(@envs), shift(@envs));
-      $value =~ s/(\\")/\\$1/g if defined $value;
-      $out .= $class->${\"build_${shelltype}_env_declaration"}($name, $value);
-    }
-    return $out;
-  }
-  
-  # simple routines that take two arguments: an %ENV key and a value. return
-  # strings that are suitable for passing directly to the relevant shell to set
-  # said key to said value.
-  sub build_bourne_env_declaration {
-    my $class = shift;
-    my($name, $value) = @_;
-    return defined($value) ? qq{export ${name}="${value}";\n} : qq{unset ${name};\n};
-  }
-  
-  sub build_csh_env_declaration {
-    my $class = shift;
-    my($name, $value) = @_;
-    return defined($value) ? qq{setenv ${name} "${value}"\n} : qq{unsetenv ${name}\n};
-  }
-  
-  sub build_win32_env_declaration {
-    my $class = shift;
-    my($name, $value) = @_;
-    return defined($value) ? qq{set ${name}=${value}\n} : qq{set ${name}=\n};
-  }
-  
-  sub setup_env_hash_for {
-    my ($class, $path, $deactivating) = @_;
-    my %envs = $class->build_environment_vars_for($path, $deactivating, INTERPOLATE_ENV);
-    @ENV{keys %envs} = values %envs;
-  }
-  
-  sub build_environment_vars_for {
-    my ($class, $path, $deactivating, $interpolate) = @_;
-  
-    if ($deactivating == DEACTIVATE_ONE) {
-      return $class->build_deactivate_environment_vars_for($path, $interpolate);
-    } elsif ($deactivating == DEACTIVATE_ALL) {
-      return $class->build_deact_all_environment_vars_for($path, $interpolate);
-    } else {
-      return $class->build_activate_environment_vars_for($path, $interpolate);
+    for ($shellbin) {
+      return
+          /csh$/                   ? 'csh'
+        : /fish/                   ? 'fish'
+        : /command(?:\.com)?$/i    ? 'cmd'
+        : /cmd(?:\.exe)?$/i        ? 'cmd'
+        : /4nt(?:\.exe)?$/i        ? 'cmd'
+        : /powershell(?:\.exe)?$/i ? 'powershell'
+                                   : 'bourne';
     }
   }
   
-  # Build an environment value for a variable like PATH from a list of paths.
-  # References to existing variables are given as references to the variable name.
-  # Duplicates are removed.
-  #
-  # options:
-  # - interpolate: INTERPOLATE_ENV/LITERAL_ENV
-  # - exists: paths are included only if they exist (default: interpolate == INTERPOLATE_ENV)
-  # - filter: function to apply to each path do decide if it must be included
-  # - empty: the value to return in the case of empty value
-  my %ENV_LIST_VALUE_DEFAULTS = (
-      interpolate => INTERPOLATE_ENV,
-      exists => undef,
-      filter => sub { 1 },
-      empty => undef,
-  );
-  sub _env_list_value {
-    my $options = shift;
-    die(sprintf "unknown option '$_' at %s line %u\n", (caller)[1..2])
-      for grep { !exists $ENV_LIST_VALUE_DEFAULTS{$_} } keys %$options;
-    my %options = (%ENV_LIST_VALUE_DEFAULTS, %{ $options });
-    $options{exists} = $options{interpolate} == INTERPOLATE_ENV
-      unless defined $options{exists};
-  
-    my %seen;
-  
-    my $value = join($Config{path_sep}, map {
-        ref $_ ? ($^O eq 'MSWin32' ? "%${$_}%" : "\$${$_}") : $_
-      } grep {
-        ref $_ || (defined $_
-                   && length($_) > 0
-                   && !$seen{$_}++
-                   && $options{filter}->($_)
-                   && (!$options{exists} || -e $_))
-      } map {
-        if (ref $_ eq 'SCALAR' && $options{interpolate} == INTERPOLATE_ENV) {
-          defined $ENV{${$_}} ? (split /\Q$Config{path_sep}/, $ENV{${$_}}) : ()
-        } else {
-          $_
-        }
-      } @_);
-    return length($value) ? $value : $options{empty};
-  }
-  
-  sub build_activate_environment_vars_for {
-    my ($class, $path, $interpolate) = @_;
-    return (
-      PERL_LOCAL_LIB_ROOT =>
-              _env_list_value(
-                { interpolate => $interpolate, exists => 0, empty => '' },
-                \'PERL_LOCAL_LIB_ROOT',
-                $path,
-              ),
-      PERL_MB_OPT => "--install_base ${path}",
-      PERL_MM_OPT => "INSTALL_BASE=${path}",
-      PERL5LIB =>
-              _env_list_value(
-                { interpolate => $interpolate, exists => 0, empty => '' },
-                $class->install_base_perl_path($path),
-                \'PERL5LIB',
-              ),
-      PATH => _env_list_value(
-                { interpolate => $interpolate, exists => 0, empty => '' },
-          $class->install_base_bin_path($path),
-                \'PATH',
-              ),
-    )
-  }
-  
-  sub active_paths {
-    my ($class) = @_;
-  
-    return () unless defined $ENV{PERL_LOCAL_LIB_ROOT};
-    return grep { $_ ne '' } split /\Q$Config{path_sep}/, $ENV{PERL_LOCAL_LIB_ROOT};
-  }
-  
-  sub build_deactivate_environment_vars_for {
-    my ($class, $path, $interpolate) = @_;
-  
-    my @active_lls = $class->active_paths;
-  
-    if (!grep { $_ eq $path } @active_lls) {
-      warn "Tried to deactivate inactive local::lib '$path'\n";
-      return ();
-    }
-  
-    my $perl_path = $class->install_base_perl_path($path);
-    my $arch_path = $class->install_base_arch_path($path);
-    my $bin_path = $class->install_base_bin_path($path);
-  
-  
-    my %env = (
-      PERL_LOCAL_LIB_ROOT => _env_list_value(
-        {
-          exists => 0,
-        },
-        grep { $_ ne $path } @active_lls
-      ),
-      PERL5LIB => _env_list_value(
-        {
-          exists => 0,
-          filter => sub {
-            $_ ne $perl_path && $_ ne $arch_path
-          },
-        },
-        \'PERL5LIB',
-      ),
-      PATH => _env_list_value(
-        {
-          exists => 0,
-          filter => sub { $_ ne $bin_path },
-        },
-        \'PATH',
-      ),
-    );
-  
-    # If removing ourselves from the "top of the stack", set install paths to
-    # correspond with the new top of stack.
-    if ($active_lls[-1] eq $path) {
-      my $new_top = $active_lls[-2];
-      $env{PERL_MB_OPT} = defined($new_top) ? "--install_base ${new_top}" : undef;
-      $env{PERL_MM_OPT} = defined($new_top) ? "INSTALL_BASE=${new_top}" : undef;
-    }
-  
-    return %env;
-  }
-  
-  sub build_deact_all_environment_vars_for {
-    my ($class, $path, $interpolate) = @_;
-  
-    my @active_lls = $class->active_paths;
-  
-    my %perl_paths = map { (
-        $class->install_base_perl_path($_) => 1,
-        $class->install_base_arch_path($_) => 1
-      ) } @active_lls;
-    my %bin_paths = map { (
-        $class->install_base_bin_path($_) => 1,
-      ) } @active_lls;
-  
-    my %env = (
-      PERL_LOCAL_LIB_ROOT => undef,
-      PERL_MM_OPT => undef,
-      PERL_MB_OPT => undef,
-      PERL5LIB => _env_list_value(
-        {
-          exists => 0,
-          filter => sub {
-            ! scalar grep { exists $perl_paths{$_} } $_[0]
-          },
-        },
-        \'PERL5LIB'
-      ),
-      PATH => _env_list_value(
-        {
-          exists => 0,
-          filter => sub {
-            ! scalar grep { exists $bin_paths{$_} } $_[0]
-          },
-        },
-        \'PATH'
-      ),
-    );
-  
-    return %env;
-  }
-  
-  =begin testing
-  
-  #:: test classmethod
-  
-  File::Path::rmtree('t/var/splat');
-  
-  $c->ensure_dir_structure_for('t/var/splat');
-  
-  ok(-d 't/var/splat');
-  
-  =end testing
+  1;
+  __END__
   
   =encoding utf8
   
@@ -19644,19 +21176,24 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
     # Just print out useful shell commands
     $ perl -Mlocal::lib
-    export PERL_MB_OPT='--install_base /home/username/perl5'
-    export PERL_MM_OPT='INSTALL_BASE=/home/username/perl5'
-    export PERL5LIB='/home/username/perl5/lib/perl5/i386-linux:/home/username/perl5/lib/perl5'
-    export PATH="/home/username/perl5/bin:$PATH"
+    PERL_MB_OPT='--install_base /home/username/perl5'; export PERL_MB_OPT;
+    PERL_MM_OPT='INSTALL_BASE=/home/username/perl5'; export PERL_MM_OPT;
+    PERL5LIB="/home/username/perl5/lib/perl5"; export PERL5LIB;
+    PATH="/home/username/perl5/bin:$PATH"; export PATH;
+    PERL_LOCAL_LIB_ROOT="/home/usename/perl5:$PERL_LOCAL_LIB_ROOT"; export PERL_LOCAL_LIB_ROOT;
+  
+  From a .bashrc file -
+  
+    [ $SHLVL -eq 1 ] && eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib)"
   
   =head2 The bootstrapping technique
   
   A typical way to install local::lib is using what is known as the
   "bootstrapping" technique.  You would do this if your system administrator
   hasn't already installed local::lib.  In this case, you'll need to install
-  local::lib in your home directory. 
+  local::lib in your home directory.
   
-  If you do have administrative privileges, you will still want to set up your 
+  Even if you do have administrative privileges, you will still want to set up your
   environment variables, as discussed in step 4. Without this, you would still
   install the modules into the system CPAN installation and also your Perl scripts
   will not use the lib/ path you bootstrapped with local::lib.
@@ -19665,12 +21202,18 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
   Windows users must also see L</Differences when using this module under Win32>.
   
-  1. Download and unpack the local::lib tarball from CPAN (search for "Download"
+  =over 4
+  
+  =item 1.
+  
+  Download and unpack the local::lib tarball from CPAN (search for "Download"
   on the CPAN page about local::lib).  Do this as an ordinary user, not as root
   or administrator.  Unpack the file in your home directory or in any other
   convenient location.
   
-  2. Run this:
+  =item 2.
+  
+  Run this:
   
     perl Makefile.PL --bootstrap
   
@@ -19682,32 +21225,39 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
     perl Makefile.PL --bootstrap=~/foo
   
-  3. Run this: (local::lib assumes you have make installed on your system)
+  =item 3.
+  
+  Run this: (local::lib assumes you have make installed on your system)
   
     make test && make install
   
-  4. Now we need to setup the appropriate environment variables, so that Perl 
+  =item 4.
+  
+  Now we need to setup the appropriate environment variables, so that Perl
   starts using our newly generated lib/ directory. If you are using bash or
   any other Bourne shells, you can add this to your shell startup script this
   way:
   
-    echo 'eval $(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib)' >>~/.bashrc
+    echo '[ $SHLVL -eq 1 ] && eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib)"' >>~/.bashrc
   
   If you are using C shell, you can do this as follows:
   
     /bin/csh
     echo $SHELL
     /bin/csh
-    perl -I$HOME/perl5/lib/perl5 -Mlocal::lib >> ~/.cshrc
+    echo 'eval `perl -I$HOME/perl5/lib/perl5 -Mlocal::lib`' >> ~/.cshrc
   
-  If you passed to bootstrap a directory other than default, you also need to give that as 
-  import parameter to the call of the local::lib module like this way:
+  If you passed to bootstrap a directory other than default, you also need to
+  give that as import parameter to the call of the local::lib module like this
+  way:
   
-    echo 'eval $(perl -I$HOME/foo/lib/perl5 -Mlocal::lib=$HOME/foo)' >>~/.bashrc
+    echo '[ $SHLVL -eq 1 ] && eval "$(perl -I$HOME/foo/lib/perl5 -Mlocal::lib=$HOME/foo)"' >>~/.bashrc
   
   After writing your shell configuration file, be sure to re-read it to get the
-  changed settings into your current shell's environment. Bourne shells use 
+  changed settings into your current shell's environment. Bourne shells use
   C<. ~/.bashrc> for this, whereas C shells use C<source ~/.cshrc>.
+  
+  =back
   
   If you're on a slower machine, or are operating under draconian disk space
   limitations, you can disable the automatic generation of manpages from POD when
@@ -19715,9 +21265,9 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
     perl Makefile.PL --bootstrap --no-manpages
   
-  To avoid doing several bootstrap for several Perl module environments on the 
-  same account, for example if you use it for several different deployed 
-  applications independently, you can use one bootstrapped local::lib 
+  To avoid doing several bootstrap for several Perl module environments on the
+  same account, for example if you use it for several different deployed
+  applications independently, you can use one bootstrapped local::lib
   installation to install modules in different directories directly this way:
   
     cd ~/mydir1
@@ -19727,6 +21277,12 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
     perl -MCPAN -e install ...    ### whatever modules you want
     cd ../mydir2
     ... REPEAT ...
+  
+  When used in a C<.bashrc> file, it is recommended that you protect against
+  re-activating a directory in a sub-shell.  This can be done by checking the
+  C<$SHLVL> variable as shown in synopsis.  Without this, sub-shells created by
+  the user or other programs will override changes made to the parent shell's
+  environment.
   
   If you are working with several C<local::lib> environments, you may want to
   remove some of them from the current environment without disturbing the others.
@@ -19768,14 +21324,14 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
     C:\>perl -Mlocal::lib
     set PERL_MB_OPT=--install_base C:\DOCUME~1\ADMINI~1\perl5
     set PERL_MM_OPT=INSTALL_BASE=C:\DOCUME~1\ADMINI~1\perl5
-    set PERL5LIB=C:\DOCUME~1\ADMINI~1\perl5\lib\perl5;C:\DOCUME~1\ADMINI~1\perl5\lib\perl5\MSWin32-x86-multi-thread
+    set PERL5LIB=C:\DOCUME~1\ADMINI~1\perl5\lib\perl5
     set PATH=C:\DOCUME~1\ADMINI~1\perl5\bin;%PATH%
-    
+  
     ### To set the environment for this shell alone
     C:\>perl -Mlocal::lib > %TEMP%\tmp.bat && %TEMP%\tmp.bat && del %TEMP%\tmp.bat
     ### instead of $(perl -Mlocal::lib=./)
   
-  If you want the environment entries to persist, you'll need to add then to the
+  If you want the environment entries to persist, you'll need to add them to the
   Control Panel's System applet yourself or use L<App::local::lib::Win32Helper>.
   
   The "~" is translated to the user's profile directory (the directory named for
@@ -19783,6 +21339,13 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   (Windows Vista or later)) unless $ENV{HOME} exists. After that, the home
   directory is translated to a short name (which means the directory must exist)
   and the subdirectories are created.
+  
+  =head3 PowerShell
+  
+  local::lib also supports PowerShell, and can be used with the
+  C<Invoke-Expression> cmdlet.
+  
+    Invoke-Expression "$(perl -Mlocal::lib)"
   
   =head1 RATIONALE
   
@@ -19804,7 +21367,7 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   If you are using a package management system (such as Debian), you don't need to
   worry about Debian and CPAN stepping on each other's toes.  Your local version
   of the packages will be written to an entirely separate directory from those
-  installed by Debian.  
+  installed by Debian.
   
   =head1 DESCRIPTION
   
@@ -19834,9 +21397,11 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
   =item PATH
   
-  PATH is appended to, rather than clobbered.
+  =item PERL_LOCAL_LIB_ROOT
   
   =back
+  
+  When possible, these will be appended to instead of overwritten entirely.
   
   These values are then available for reference by any code after import.
   
@@ -19846,7 +21411,7 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   there are a number of caveats, and the best approach is always to perform a
   build against a clean perl (i.e. site and vendor as close to empty as possible).
   
-  =head1 OPTIONS
+  =head1 IMPORT OPTIONS
   
   Options are values that can be passed to the C<local::lib> import besides the
   directory to use. They are specified as C<use local::lib '--option'[, path];>
@@ -19862,7 +21427,18 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   Remove all directories that were added to search paths by C<local::lib> from the
   search paths.
   
-  =head1 METHODS
+  =head2 --shelltype
+  
+  Specify the shell type to use for output.  By default, the shell will be
+  detected based on the environment.  Should be one of: C<bourne>, C<csh>,
+  C<cmd>, or C<powershell>.
+  
+  =head2 --no-create
+  
+  Prevents C<local::lib> from creating directories when activating dirs.  This is
+  likely to cause issues on Win32 systems.
+  
+  =head1 CLASS METHODS
   
   =head2 ensure_dir_structure_for
   
@@ -19894,9 +21470,9 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
   =over 4
   
-  =item Arguments: $path, $interpolate
+  =item Arguments: $path
   
-  =item Return value: \%environment_vars
+  =item Return value: %environment_vars
   
   =back
   
@@ -19927,7 +21503,8 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   =back
   
   Returns a list of active C<local::lib> paths, according to the
-  C<PERL_LOCAL_LIB_ROOT> environment variable.
+  C<PERL_LOCAL_LIB_ROOT> environment variable and verified against
+  what is really in C<@INC>.
   
   =head2 install_base_perl_path
   
@@ -19943,20 +21520,19 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   library installation. Appends the directories C<lib> and C<perl5> to the given
   path.
   
-  =head2 install_base_arch_path
+  =head2 lib_paths_for
   
   =over 4
   
   =item Arguments: $path
   
-  =item Return value: $install_base_arch_path
+  =item Return value: @lib_paths
   
   =back
   
-  Returns a path describing where to install the architecture-specific Perl
-  modules for this local library installation. Based on the
-  L</install_base_perl_path> method's return value, and appends the value of
-  C<$Config{archname}>.
+  Returns the list of paths perl will search for libraries, given a base path.
+  This includes the base path itself, the architecture specific subdirectory, and
+  perl version specific subdirectories.  These paths may not all exist.
   
   =head2 install_base_bin_path
   
@@ -19969,8 +21545,20 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   =back
   
   Returns a path describing where to install the executable programs for this
-  local library installation. Based on the L</install_base_perl_path> method's
-  return value, and appends the directory C<bin>.
+  local library installation. Appends the directory C<bin> to the given path.
+  
+  =head2 installer_options_for
+  
+  =over 4
+  
+  =item Arguments: $path
+  
+  =item Return value: %installer_env_vars
+  
+  =back
+  
+  Returns a hash of environment variables that should be set to cause
+  installation into the given path.
   
   =head2 resolve_empty_path
   
@@ -20029,6 +21617,141 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   L</resolve_relative_path>. The result of this final call is returned from
   L</resolve_path>.
   
+  =head1 OBJECT INTERFACE
+  
+  =head2 new
+  
+  =over 4
+  
+  =item Arguments: %attributes
+  
+  =item Return value: $local_lib
+  
+  =back
+  
+  Constructs a new C<local::lib> object, representing the current state of
+  C<@INC> and the relevant environment variables.
+  
+  =head1 ATTRIBUTES
+  
+  =head2 roots
+  
+  An arrayref representing active C<local::lib> directories.
+  
+  =head2 inc
+  
+  An arrayref representing C<@INC>.
+  
+  =head2 libs
+  
+  An arrayref representing the PERL5LIB environment variable.
+  
+  =head2 bins
+  
+  An arrayref representing the PATH environment variable.
+  
+  =head2 extra
+  
+  A hashref of extra environment variables (e.g. C<PERL_MM_OPT> and
+  C<PERL_MB_OPT>)
+  
+  =head2 no_create
+  
+  If set, C<local::lib> will not try to create directories when activating them.
+  
+  =head1 OBJECT METHODS
+  
+  =head2 clone
+  
+  =over 4
+  
+  =item Arguments: %attributes
+  
+  =item Return value: $local_lib
+  
+  =back
+  
+  Constructs a new C<local::lib> object based on the existing one, overriding the
+  specified attributes.
+  
+  =head2 activate
+  
+  =over 4
+  
+  =item Arguments: $path
+  
+  =item Return value: $new_local_lib
+  
+  =back
+  
+  Constructs a new instance with the specified path active.
+  
+  =head2 deactivate
+  
+  =over 4
+  
+  =item Arguments: $path
+  
+  =item Return value: $new_local_lib
+  
+  =back
+  
+  Constructs a new instance with the specified path deactivated.
+  
+  =head2 deactivate_all
+  
+  =over 4
+  
+  =item Arguments: None
+  
+  =item Return value: $new_local_lib
+  
+  =back
+  
+  Constructs a new instance with all C<local::lib> directories deactivated.
+  
+  =head2 environment_vars_string
+  
+  =over 4
+  
+  =item Arguments: [ $shelltype ]
+  
+  =item Return value: $shell_env_string
+  
+  =back
+  
+  Returns a string to set up the C<local::lib>, meant to be run by a shell.
+  
+  =head2 build_environment_vars
+  
+  =over 4
+  
+  =item Arguments: None
+  
+  =item Return value: %environment_vars
+  
+  =back
+  
+  Returns a hash with the variables listed above, properly set to use the
+  given path as the base directory.
+  
+  =head2 setup_env_hash
+  
+  =over 4
+  
+  =item Arguments: None
+  
+  =item Return value: None
+  
+  =back
+  
+  Constructs the C<%ENV> keys for the given path, by calling
+  L</build_environment_vars>.
+  
+  =head2 setup_local_lib
+  
+  Constructs the C<%ENV> hash using L</setup_env_hash>, and set up C<@INC>.
+  
   =head1 A WARNING ABOUT UNINST=1
   
   Be careful about using local::lib in combination with "make install UNINST=1".
@@ -20041,28 +21764,52 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
   =head1 LIMITATIONS
   
-  The perl toolchain is unable to handle directory names with spaces in it,
-  so you cant put your local::lib bootstrap into a directory with spaces. What
-  you can do is moving your local::lib to a directory with spaces B<after> you
-  installed all modules inside your local::lib bootstrap. But be aware that you
-  cant update or install CPAN modules after the move.
+  =over 4
   
-  Rather basic shell detection. Right now anything with csh in its name is
+  =item * Directory names with spaces in them are not well supported by the perl
+  toolchain and the programs it uses.  Pure-perl distributions should support
+  spaces, but problems are more likely with dists that require compilation. A
+  workaround you can do is moving your local::lib to a directory with spaces
+  B<after> you installed all modules inside your local::lib bootstrap. But be
+  aware that you can't update or install CPAN modules after the move.
+  
+  =item * Rather basic shell detection. Right now anything with csh in its name is
   assumed to be a C shell or something compatible, and everything else is assumed
   to be Bourne, except on Win32 systems. If the C<SHELL> environment variable is
   not set, a Bourne-compatible shell is assumed.
   
-  Bootstrap is a hack and will use CPAN.pm for ExtUtils::MakeMaker even if you
-  have CPANPLUS installed.
+  =item * Kills any existing PERL_MM_OPT or PERL_MB_OPT.
   
-  Kills any existing PERL5LIB, PERL_MM_OPT or PERL_MB_OPT.
+  =item * Should probably auto-fixup CPAN config if not already done.
   
-  Should probably auto-fixup CPAN config if not already done.
+  =item * local::lib loads L<File::Spec>.  When used to set shell variables,
+  this isn't a problem.  When used inside a perl script, any L<File::Spec>
+  version inside the local::lib will be ignored.  A workaround for this is using
+  C<use lib "$ENV{HOME}/perl5/lib/perl5";> inside the script instead of using
+  C<local::lib> directly.
+  
+  =item * Conflicts with L<ExtUtils::MakeMaker>'s C<PREFIX> option.
+  C<local::lib> uses the C<INSTALL_BASE> option, as it has more predictable and
+  sane behavior.  If something attempts to use the C<PREFIX> option when running
+  a F<Makefile.PL>, L<ExtUtils::MakeMaker> will refuse to run, as the two
+  options conflict.  This can be worked around by temporarily unsetting the
+  C<PERL_MM_OPT> environment variable.
+  
+  =item * Conflicts with L<Module::Build>'s C<--prefix> option.  Similar to the
+  previous limitation, but any C<--prefix> option specified will be ignored.
+  This can be worked around by temporarily unsetting the C<PERL_MB_OPT>
+  environment variable.
+  
+  =back
   
   Patches very much welcome for any of the above.
   
-  On Win32 systems, does not have a way to write the created environment variables
-  to the registry, so that they can persist through a reboot.
+  =over 4
+  
+  =item * On Win32 systems, does not have a way to write the created environment
+  variables to the registry, so that they can persist through a reboot.
+  
+  =back
   
   =head1 TROUBLESHOOTING
   
@@ -20121,8 +21868,8 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   documentation additions, contributed by Christopher Nehren <apeiron@cpan.org>.
   
   Doc patches for a custom local::lib directory, more cleanups in the english
-  documentation and a L<german documentation|POD2::DE::local::lib> contributed by Torsten Raudssus
-  <torsten@raudssus.de>.
+  documentation and a L<german documentation|POD2::DE::local::lib> contributed by
+  Torsten Raudssus <torsten@raudssus.de>.
   
   Hans Dieter Pearcey <hdp@cpan.org> sent in some additional tests for ensuring
   things will install properly, submitted a fix for the bug causing problems with
@@ -20144,41 +21891,299 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   Documentation patches to make win32 usage clearer by
   David Mertens <dcmertens.perl@gmail.com> (run4flat).
   
-  Brazilian L<portuguese translation|POD2::PT_BR::local::lib> and minor doc patches contributed by Breno
-  G. de Oliveira <garu@cpan.org>.
+  Brazilian L<portuguese translation|POD2::PT_BR::local::lib> and minor doc
+  patches contributed by Breno G. de Oliveira <garu@cpan.org>.
   
   Improvements to stacking multiple local::lib dirs and removing them from the
   environment later on contributed by Andrew Rodland <arodland@cpan.org>.
   
-  Patch for Carp version mismatch contributed by Hakim Cassimally <osfameron@cpan.org>.
+  Patch for Carp version mismatch contributed by Hakim Cassimally
+  <osfameron@cpan.org>.
+  
+  Rewrite of internals and numerous bug fixes and added features contributed by
+  Graham Knop <haarg@haarg.org>.
   
   =head1 COPYRIGHT
   
-  Copyright (c) 2007 - 2010 the local::lib L</AUTHOR> and L</CONTRIBUTORS> as
+  Copyright (c) 2007 - 2013 the local::lib L</AUTHOR> and L</CONTRIBUTORS> as
   listed above.
   
   =head1 LICENSE
   
-  This library is free software and may be distributed under the same terms
-  as perl itself.
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
   
   =cut
-  
-  1;
 LOCAL_LIB
 
-$fatpacked{"version.pm"} = <<'VERSION';
+$fatpacked{"parent.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PARENT';
+  package parent;
+  use strict;
+  use vars qw($VERSION);
+  $VERSION = '0.225';
+  
+  sub import {
+      my $class = shift;
+  
+      my $inheritor = caller(0);
+  
+      if ( @_ and $_[0] eq '-norequire' ) {
+          shift @_;
+      } else {
+          for ( my @filename = @_ ) {
+              if ( $_ eq $inheritor ) {
+                  warn "Class '$inheritor' tried to inherit from itself\n";
+              };
+  
+              s{::|'}{/}g;
+              require "$_.pm"; # dies if the file is not found
+          }
+      }
+  
+      {
+          no strict 'refs';
+          push @{"$inheritor\::ISA"}, @_;
+      };
+  };
+  
+  "All your base are belong to us"
+  
+  __END__
+  
+  =encoding utf8
+  
+  =head1 NAME
+  
+  parent - Establish an ISA relationship with base classes at compile time
+  
+  =head1 SYNOPSIS
+  
+      package Baz;
+      use parent qw(Foo Bar);
+  
+  =head1 DESCRIPTION
+  
+  Allows you to both load one or more modules, while setting up inheritance from
+  those modules at the same time.  Mostly similar in effect to
+  
+      package Baz;
+      BEGIN {
+          require Foo;
+          require Bar;
+          push @ISA, qw(Foo Bar);
+      }
+  
+  By default, every base class needs to live in a file of its own.
+  If you want to have a subclass and its parent class in the same file, you
+  can tell C<parent> not to load any modules by using the C<-norequire> switch:
+  
+    package Foo;
+    sub exclaim { "I CAN HAS PERL" }
+  
+    package DoesNotLoadFooBar;
+    use parent -norequire, 'Foo', 'Bar';
+    # will not go looking for Foo.pm or Bar.pm
+  
+  This is equivalent to the following code:
+  
+    package Foo;
+    sub exclaim { "I CAN HAS PERL" }
+  
+    package DoesNotLoadFooBar;
+    push @DoesNotLoadFooBar::ISA, 'Foo', 'Bar';
+  
+  This is also helpful for the case where a package lives within
+  a differently named file:
+  
+    package MyHash;
+    use Tie::Hash;
+    use parent -norequire, 'Tie::StdHash';
+  
+  This is equivalent to the following code:
+  
+    package MyHash;
+    require Tie::Hash;
+    push @ISA, 'Tie::StdHash';
+  
+  If you want to load a subclass from a file that C<require> would
+  not consider an eligible filename (that is, it does not end in
+  either C<.pm> or C<.pmc>), use the following code:
+  
+    package MySecondPlugin;
+    require './plugins/custom.plugin'; # contains Plugin::Custom
+    use parent -norequire, 'Plugin::Custom';
+  
+  =head1 DIAGNOSTICS
+  
+  =over 4
+  
+  =item Class 'Foo' tried to inherit from itself
+  
+  Attempting to inherit from yourself generates a warning.
+  
+      package Foo;
+      use parent 'Foo';
+  
+  =back
+  
+  =head1 HISTORY
+  
+  This module was forked from L<base> to remove the cruft
+  that had accumulated in it.
+  
+  =head1 CAVEATS
+  
+  =head1 SEE ALSO
+  
+  L<base>
+  
+  =head1 AUTHORS AND CONTRIBUTORS
+  
+  RafaÃ«l Garcia-Suarez, Bart Lateur, Max Maischein, Anno Siegel, Michael Schwern
+  
+  =head1 MAINTAINER
+  
+  Max Maischein C< corion@cpan.org >
+  
+  Copyright (c) 2007-10 Max Maischein C<< <corion@cpan.org> >>
+  Based on the idea of C<base.pm>, which was introduced with Perl 5.004_04.
+  
+  =head1 LICENSE
+  
+  This module is released under the same terms as Perl itself.
+  
+  =cut
+PARENT
+
+$fatpacked{"version.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'VERSION';
   #!perl -w
   package version;
   
-  use 5.005_04;
+  use 5.006002;
   use strict;
   
   use vars qw(@ISA $VERSION $CLASS $STRICT $LAX *declare *qv);
   
-  $VERSION = 0.9902;
-  
+  $VERSION = 0.9908;
   $CLASS = 'version';
+  
+  # !!!!Delete this next block completely when adding to Perl core!!!!
+  {
+      local $SIG{'__DIE__'};
+      eval "use version::vxs $VERSION";
+      if ( $@ ) { # don't have the XS version installed
+  	eval "use version::vpp $VERSION"; # don't tempt fate
+  	die "$@" if ( $@ );
+  	push @ISA, "version::vpp";
+  	local $^W;
+  	*version::qv = \&version::vpp::qv;
+  	*version::declare = \&version::vpp::declare;
+  	*version::_VERSION = \&version::vpp::_VERSION;
+  	*version::vcmp = \&version::vpp::vcmp;
+  	*version::new = \&version::vpp::new;
+  	if ($] >= 5.009000) {
+  	    no strict 'refs';
+  	    *version::stringify = \&version::vpp::stringify;
+  	    *{'version::(""'} = \&version::vpp::stringify;
+  	    *{'version::(<=>'} = \&version::vpp::vcmp;
+  	    *version::parse = \&version::vpp::parse;
+  	}
+      }
+      else { # use XS module
+  	push @ISA, "version::vxs";
+  	local $^W;
+  	*version::declare = \&version::vxs::declare;
+  	*version::qv = \&version::vxs::qv;
+  	*version::_VERSION = \&version::vxs::_VERSION;
+  	*version::vcmp = \&version::vxs::VCMP;
+  	*version::new = \&version::vxs::new;
+  	if ($] >= 5.009000) {
+  	    no strict 'refs';
+  	    *version::stringify = \&version::vxs::stringify;
+  	    *{'version::(""'} = \&version::vxs::stringify;
+  	    *{'version::(<=>'} = \&version::vxs::VCMP;
+  	    *version::parse = \&version::vxs::parse;
+  	}
+      }
+  }
+  
+  # avoid using Exporter
+  require version::regex;
+  *version::is_lax = \&version::regex::is_lax;
+  *version::is_strict = \&version::regex::is_strict;
+  *LAX = \$version::regex::LAX;
+  *STRICT = \$version::regex::STRICT;
+  
+  sub import {
+      no strict 'refs';
+      my ($class) = shift;
+  
+      # Set up any derived class
+      unless ($class eq $CLASS) {
+  	local $^W;
+  	*{$class.'::declare'} =  \&{$CLASS.'::declare'};
+  	*{$class.'::qv'} = \&{$CLASS.'::qv'};
+      }
+  
+      my %args;
+      if (@_) { # any remaining terms are arguments
+  	map { $args{$_} = 1 } @_
+      }
+      else { # no parameters at all on use line
+  	%args =
+  	(
+  	    qv => 1,
+  	    'UNIVERSAL::VERSION' => 1,
+  	);
+      }
+  
+      my $callpkg = caller();
+  
+      if (exists($args{declare})) {
+  	*{$callpkg.'::declare'} =
+  	    sub {return $class->declare(shift) }
+  	  unless defined(&{$callpkg.'::declare'});
+      }
+  
+      if (exists($args{qv})) {
+  	*{$callpkg.'::qv'} =
+  	    sub {return $class->qv(shift) }
+  	  unless defined(&{$callpkg.'::qv'});
+      }
+  
+      if (exists($args{'UNIVERSAL::VERSION'})) {
+  	local $^W;
+  	*UNIVERSAL::VERSION
+  		= \&{$CLASS.'::_VERSION'};
+      }
+  
+      if (exists($args{'VERSION'})) {
+  	*{$callpkg.'::VERSION'} = \&{$CLASS.'::_VERSION'};
+      }
+  
+      if (exists($args{'is_strict'})) {
+  	*{$callpkg.'::is_strict'} = \&{$CLASS.'::is_strict'}
+  	  unless defined(&{$callpkg.'::is_strict'});
+      }
+  
+      if (exists($args{'is_lax'})) {
+  	*{$callpkg.'::is_lax'} = \&{$CLASS.'::is_lax'}
+  	  unless defined(&{$callpkg.'::is_lax'});
+      }
+  }
+  
+  
+  1;
+VERSION
+
+$fatpacked{"version/regex.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'VERSION_REGEX';
+  package version::regex;
+  
+  use strict;
+  
+  use vars qw($VERSION $CLASS $STRICT $LAX);
+  
+  $VERSION = 0.9908;
   
   #--------------------------------------------------------------------------#
   # Version regexp components
@@ -20284,112 +22289,14 @@ $fatpacked{"version.pm"} = <<'VERSION';
   
   #--------------------------------------------------------------------------#
   
-  {
-      local $SIG{'__DIE__'};
-      eval "use version::vxs $VERSION";
-      if ( $@ ) { # don't have the XS version installed
-  	eval "use version::vpp $VERSION"; # don't tempt fate
-  	die "$@" if ( $@ );
-  	push @ISA, "version::vpp";
-  	local $^W;
-  	*version::qv = \&version::vpp::qv;
-  	*version::declare = \&version::vpp::declare;
-  	*version::_VERSION = \&version::vpp::_VERSION;
-  	*version::vcmp = \&version::vpp::vcmp;
-  	*version::new = \&version::vpp::new;
-  	if ($] >= 5.009000) {
-  	    no strict 'refs';
-  	    *version::stringify = \&version::vpp::stringify;
-  	    *{'version::(""'} = \&version::vpp::stringify;
-  	    *{'version::(<=>'} = \&version::vpp::vcmp;
-  	    *version::parse = \&version::vpp::parse;
-  	}
-      }
-      else { # use XS module
-  	push @ISA, "version::vxs";
-  	local $^W;
-  	*version::declare = \&version::vxs::declare;
-  	*version::qv = \&version::vxs::qv;
-  	*version::_VERSION = \&version::vxs::_VERSION;
-  	*version::vcmp = \&version::vxs::VCMP;
-  	*version::new = \&version::vxs::new;
-  	if ($] >= 5.009000) {
-  	    no strict 'refs';
-  	    *version::stringify = \&version::vxs::stringify;
-  	    *{'version::(""'} = \&version::vxs::stringify;
-  	    *{'version::(<=>'} = \&version::vxs::VCMP;
-  	    *version::parse = \&version::vxs::parse;
-  	}
-  
-      }
-  }
-  
   # Preloaded methods go here.
-  sub import {
-      no strict 'refs';
-      my ($class) = shift;
-  
-      # Set up any derived class
-      unless ($class eq 'version') {
-  	local $^W;
-  	*{$class.'::declare'} =  \&version::declare;
-  	*{$class.'::qv'} = \&version::qv;
-      }
-  
-      my %args;
-      if (@_) { # any remaining terms are arguments
-  	map { $args{$_} = 1 } @_
-      }
-      else { # no parameters at all on use line
-      	%args = 
-  	(
-  	    qv => 1,
-  	    'UNIVERSAL::VERSION' => 1,
-  	);
-      }
-  
-      my $callpkg = caller();
-      
-      if (exists($args{declare})) {
-  	*{$callpkg.'::declare'} = 
-  	    sub {return $class->declare(shift) }
-  	  unless defined(&{$callpkg.'::declare'});
-      }
-  
-      if (exists($args{qv})) {
-  	*{$callpkg.'::qv'} =
-  	    sub {return $class->qv(shift) }
-  	  unless defined(&{$callpkg.'::qv'});
-      }
-  
-      if (exists($args{'UNIVERSAL::VERSION'})) {
-  	local $^W;
-  	*UNIVERSAL::VERSION 
-  		= \&version::_VERSION;
-      }
-  
-      if (exists($args{'VERSION'})) {
-  	*{$callpkg.'::VERSION'} = \&version::_VERSION;
-      }
-  
-      if (exists($args{'is_strict'})) {
-  	*{$callpkg.'::is_strict'} = \&version::is_strict
-  	  unless defined(&{$callpkg.'::is_strict'});
-      }
-  
-      if (exists($args{'is_lax'})) {
-  	*{$callpkg.'::is_lax'} = \&version::is_lax
-  	  unless defined(&{$callpkg.'::is_lax'});
-      }
-  }
-  
   sub is_strict	{ defined $_[0] && $_[0] =~ qr/ \A $STRICT \z /x }
   sub is_lax	{ defined $_[0] && $_[0] =~ qr/ \A $LAX \z /x }
   
   1;
-VERSION
+VERSION_REGEX
 
-$fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
+$fatpacked{"version/vpp.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'VERSION_VPP';
   package charstar;
   # a little helper class to emulate C char* semantics in Perl
   # so that prescan_version can use the same code as in C
@@ -20508,12 +22415,20 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   }
   
   package version::vpp;
+  
+  use 5.006002;
   use strict;
   
-  use POSIX qw/locale_h/;
-  use locale;
-  use vars qw ($VERSION @ISA @REGEXS);
-  $VERSION = 0.9902;
+  use Config;
+  use vars qw($VERSION $CLASS @ISA $LAX $STRICT);
+  $VERSION = 0.9908;
+  $CLASS = 'version::vpp';
+  
+  require version::regex;
+  *version::vpp::is_strict = \&version::regex::is_strict;
+  *version::vpp::is_lax = \&version::regex::is_lax;
+  *LAX = \$version::regex::LAX;
+  *STRICT = \$version::regex::STRICT;
   
   use overload (
       '""'       => \&stringify,
@@ -20540,6 +22455,64 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   	sub enabled {return $^W;}
   	1;
       ';
+  }
+  
+  sub import {
+      no strict 'refs';
+      my ($class) = shift;
+  
+      # Set up any derived class
+      unless ($class eq $CLASS) {
+  	local $^W;
+  	*{$class.'::declare'} =  \&{$CLASS.'::declare'};
+  	*{$class.'::qv'} = \&{$CLASS.'::qv'};
+      }
+  
+      my %args;
+      if (@_) { # any remaining terms are arguments
+  	map { $args{$_} = 1 } @_
+      }
+      else { # no parameters at all on use line
+  	%args =
+  	(
+  	    qv => 1,
+  	    'UNIVERSAL::VERSION' => 1,
+  	);
+      }
+  
+      my $callpkg = caller();
+  
+      if (exists($args{declare})) {
+  	*{$callpkg.'::declare'} =
+  	    sub {return $class->declare(shift) }
+  	  unless defined(&{$callpkg.'::declare'});
+      }
+  
+      if (exists($args{qv})) {
+  	*{$callpkg.'::qv'} =
+  	    sub {return $class->qv(shift) }
+  	  unless defined(&{$callpkg.'::qv'});
+      }
+  
+      if (exists($args{'UNIVERSAL::VERSION'})) {
+  	local $^W;
+  	*UNIVERSAL::VERSION
+  		= \&{$CLASS.'::_VERSION'};
+      }
+  
+      if (exists($args{'VERSION'})) {
+  	*{$callpkg.'::VERSION'} = \&{$CLASS.'::_VERSION'};
+      }
+  
+      if (exists($args{'is_strict'})) {
+  	*{$callpkg.'::is_strict'} = \&{$CLASS.'::is_strict'}
+  	  unless defined(&{$callpkg.'::is_strict'});
+      }
+  
+      if (exists($args{'is_lax'})) {
+  	*{$callpkg.'::is_lax'} = \&{$CLASS.'::is_lax'}
+  	  unless defined(&{$callpkg.'::is_lax'});
+      }
   }
   
   my $VERSION_MAX = 0x7FFFFFFF;
@@ -20804,7 +22777,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
       if ($errstr) {
   	# 'undef' is a special case and not an error
   	if ( $s ne 'undef') {
-  	    use Carp;
+  	    require Carp;
   	    Carp::croak($errstr);
   	}
       }
@@ -20960,25 +22933,49 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
       return $s;
   }
   
-  sub new
-  {
-  	my ($class, $value) = @_;
-  	unless (defined $class) {
-  	    require Carp;
-  	    Carp::croak('Usage: version::new(class, version)');
-  	}
-  	my $self = bless ({}, ref ($class) || $class);
-  	my $qv = FALSE;
+  sub new {
+      my $class = shift;
+      unless (defined $class or $#_ > 1) {
+  	require Carp;
+  	Carp::croak('Usage: version::new(class, version)');
+      }
   
-  	if ( ref($value) && eval('$value->isa("version")') ) {
-  	    # Can copy the elements directly
-  	    $self->{version} = [ @{$value->{version} } ];
-  	    $self->{qv} = 1 if $value->{qv};
-  	    $self->{alpha} = 1 if $value->{alpha};
-  	    $self->{original} = ''.$value->{original};
-  	    return $self;
-  	}
+      my $self = bless ({}, ref ($class) || $class);
+      my $qv = FALSE;
   
+      if ( $#_ == 1 ) { # must be CVS-style
+  	$qv = TRUE;
+      }
+      my $value = pop; # always going to be the last element
+  
+      if ( ref($value) && eval('$value->isa("version")') ) {
+  	# Can copy the elements directly
+  	$self->{version} = [ @{$value->{version} } ];
+  	$self->{qv} = 1 if $value->{qv};
+  	$self->{alpha} = 1 if $value->{alpha};
+  	$self->{original} = ''.$value->{original};
+  	return $self;
+      }
+  
+      if ( not defined $value or $value =~ /^undef$/ ) {
+  	# RT #19517 - special case for undef comparison
+  	# or someone forgot to pass a value
+  	push @{$self->{version}}, 0;
+  	$self->{original} = "0";
+  	return ($self);
+      }
+  
+  
+      if (ref($value) =~ m/ARRAY|HASH/) {
+  	require Carp;
+  	Carp::croak("Invalid version format (non-numeric data)");
+      }
+  
+      $value = _un_vstring($value);
+  
+      if ($Config{d_setlocale}) {
+  	use POSIX qw/locale_h/;
+  	use if $Config{d_setlocale}, 'locale';
   	my $currlocale = setlocale(LC_ALL);
   
   	# if the current locale uses commas for decimal points, we
@@ -20987,42 +22984,27 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   	if ( localeconv()->{decimal_point} eq ',' ) {
   	    $value =~ tr/,/./;
   	}
+      }
   
-  	if ( not defined $value or $value =~ /^undef$/ ) {
-  	    # RT #19517 - special case for undef comparison
-  	    # or someone forgot to pass a value
-  	    push @{$self->{version}}, 0;
-  	    $self->{original} = "0";
-  	    return ($self);
-  	}
+      # exponential notation
+      if ( $value =~ /\d+.?\d*e[-+]?\d+/ ) {
+  	$value = sprintf("%.9f",$value);
+  	$value =~ s/(0+)$//; # trim trailing zeros
+      }
   
-  	if ( $#_ == 2 ) { # must be CVS-style
-  	    $value = $_[2];
-  	    $qv = TRUE;
-  	}
+      my $s = scan_version($value, \$self, $qv);
   
-  	$value = _un_vstring($value);
+      if ($s) { # must be something left over
+  	warn("Version string '%s' contains invalid data; "
+  		   ."ignoring: '%s'", $value, $s);
+      }
   
-  	# exponential notation
-  	if ( $value =~ /\d+.?\d*e[-+]?\d+/ ) {
-  	    $value = sprintf("%.9f",$value);
-  	    $value =~ s/(0+)$//; # trim trailing zeros
-  	}
-  
-  	my $s = scan_version($value, \$self, $qv);
-  
-  	if ($s) { # must be something left over
-  	    warn("Version string '%s' contains invalid data; "
-                         ."ignoring: '%s'", $value, $s);
-  	}
-  
-  	return ($self);
+      return ($self);
   }
   
   *parse = \&new;
   
-  sub numify
-  {
+  sub numify {
       my ($self) = @_;
       unless (_verify($self)) {
   	require Carp;
@@ -21062,8 +23044,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
       return $string;
   }
   
-  sub normal
-  {
+  sub normal {
       my ($self) = @_;
       unless (_verify($self)) {
   	require Carp;
@@ -21098,8 +23079,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
       return $string;
   }
   
-  sub stringify
-  {
+  sub stringify {
       my ($self) = @_;
       unless (_verify($self)) {
   	require Carp;
@@ -21112,8 +23092,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   	    : $self->numify;
   }
   
-  sub vcmp
-  {
+  sub vcmp {
       require UNIVERSAL;
       my ($left,$right,$swap) = @_;
       my $class = ref($left);
@@ -21198,7 +23177,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   
   sub qv {
       my $value = shift;
-      my $class = 'version';
+      my $class = $CLASS;
       if (@_) {
   	$class = ref($value) || $value;
   	$value = shift;
@@ -21206,7 +23185,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   
       $value = _un_vstring($value);
       $value = 'v'.$value unless $value =~ /(^v|\d+\.\d+\.\d)/;
-      my $obj = version->new($value);
+      my $obj = $CLASS->new($value);
       return bless $obj, $class;
   }
   
@@ -21345,24 +23324,37 @@ VERSION_VPP
 
 s/^  //mg for values %fatpacked;
 
-unshift @INC, sub {
-  if (my $fat = $fatpacked{$_[1]}) {
-    if ($] < 5.008) {
-      return sub {
-        return 0 unless length $fat;
-        $fat =~ s/^([^\n]*\n?)//;
-        $_ = $1;
-        return 1;
-      };
-    }
-    open my $fh, '<', \$fat
-      or die "FatPacker error loading $_[1] (could be a perl installation issue?)";
-    return $fh;
-  }
-  return
-};
+my $class = 'FatPacked::'.(0+\%fatpacked);
+no strict 'refs';
+*{"${class}::files"} = sub { keys %{$_[0]} };
 
-} # END OF FATPACK CODE
+if ($] < 5.008) {
+  *{"${class}::INC"} = sub {
+     if (my $fat = $_[0]{$_[1]}) {
+       return sub {
+         return 0 unless length $fat;
+         $fat =~ s/^([^\n]*\n?)//;
+         $_ = $1;
+         return 1;
+       };
+     }
+     return;
+  };
+}
+
+else {
+  *{"${class}::INC"} = sub {
+    if (my $fat = $_[0]{$_[1]}) {
+      open my $fh, '<', \$fat
+        or die "FatPacker error loading $_[1] (could be a perl installation issue?)";
+      return $fh;
+    }
+    return;
+  };
+}
+
+unshift @INC, bless \%fatpacked, $class;
+  } # END OF FATPACK CODE
 
 
 
@@ -21461,6 +23453,23 @@ Download and unpack the distribution and then open the directory with
 your shell. Handy to poke around the source code or do manual
 testing.
 
+=item -U, --uninstall
+
+B<EXPERIMENTAL>: Uninstalls the modules. Will remove the distribution
+files from your library path using the C<.packlist> file.
+
+When used with C<-l> or C<-L>, only the files under the local::lib
+directory will be removed.
+
+B<NOTE>: If you have the "dual-life" module in multiple locations
+(i.e. C<site_perl> and C<perl> library path, with perl 5.12 or later),
+only the files in C<site_perl> will be deleted.
+
+If the distribution has bin scripts and man, they will be kept in case
+the core installation still references that, although there's no
+guarantee that the script will continue working as expected with the
+older version of .pm files.
+
 =item -h, --help
 
 Displays the help message.
@@ -21539,10 +23548,6 @@ would install Plack and all of its non-core dependencies into the
 directory C<extlib>, which can be loaded from your application with:
 
   use local::lib '/path/to/extlib';
-
-Note that this option does B<NOT> reliably work with perl
-installations supplied by operating system vendors that strips
-standard modules from perl, such as RHEL, Fedora and CentOS.
 
 =item --self-contained
 
@@ -21792,7 +23797,7 @@ directory.
 If you try to uninstall a module in C<perl> directory (i.e. core
 module), an error will be thrown.
 
-A dialog will be prompted to confirm the files to be deleted. If you pass
+A dialog wil be prompted to confirm the files to be deleted. If you pass
 C<-f> option as well, the dialog will be skipped and uninstallation
 will be forced.
 

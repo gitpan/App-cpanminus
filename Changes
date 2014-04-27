@@ -1,19 +1,9 @@
 See http://github.com/miyagawa/cpanminus/ for the latest development.
 
-1.7102  2013-09-20 13:32:36 JST
-   [New Features]
-      - Allow URLs (http, git etc.) in distfile in cpanmetadb and 02packages
-
-1.7101  2013-09-19 20:15:40 JST
-   [New Features]
-      - Experimental support of saving install.json for git based installations
-
-1.7100  2013-09-19 14:30:05 JST
-   [New Features]
-      - Support git+ pseudo URL scheme to remove ambiguity for git URLs
-
-   [Improvements]
-      - Prefer http URLs that ends with .git as git rather than regular tarballs (#296)
+1.7002  2014-04-27 07:45:53 CEST
+   [Bug Fixes]
+      - Bump fatpacked local::lib #364
+      - Fix a bug where build.log files are not properly renamed on the first run on Win32 (haarg) #368
 
 1.7001  2013-09-08 13:11:16 PDT
    [Bug Fixes]
