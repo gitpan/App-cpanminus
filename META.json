@@ -101,7 +101,7 @@
          "web" : "https://github.com/gmarler/cpanminus"
       }
    },
-   "version" : "1.7005",
+   "version" : "1.7006",
    "x_contributors" : [
       "Alessandro Ghedini <al3xbio@gmail.com>",
       "Andrew Rodland <andrew@cleverdomain.org>",

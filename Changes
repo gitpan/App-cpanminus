@@ -1,5 +1,8 @@
 See http://github.com/miyagawa/cpanminus/ for the latest development.
 
+1.7006  2014-09-02 02:24:37 EDT
+      - Even more fixes to meta placement
+
 1.7005  2014-09-02 00:00:04 EDT
       - Fix related to meta placement
 
