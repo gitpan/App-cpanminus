@@ -1,10 +1,30 @@
 See http://github.com/miyagawa/cpanminus/ for the latest development.
 
-1.7006  2014-09-02 02:24:37 EDT
-      - Even more fixes to meta placement
+1.7005  2014-09-05 05:04:06 PDT
+   [Bug Fixes]
+      - Do not index common directories such as t, xt or inc in install.json
+      - Support tarball extraction on HP-UX 11 (Brian Wightman)
 
-1.7005  2014-09-02 00:00:04 EDT
-      - Fix related to meta placement
+   [Improvements]
+      - Update Parse::PMFile to 0.19 equivalent (charsbar)
+      - Fixed various documentation (syohex, Graham Ollis)
+      - Mask passwords when failing to download a module (andyjones)
+      - Don't find directories when searching for executables (haarg)
+      - Only assume Module::Build configure prereq when there's no config prereq (haarg)
+      - Upgrade fatpacked modules to the latest
+
+1.7004  2014-04-27 18:22:11 CEST
+   [Bug Fixes]
+      - Downgrade Parse::CPAN::Meta as well #373
+
+1.7003  2014-04-27 17:11:14 CEST
+   [Bug Fixes]
+      - Downgrade CPAN::Meta (moznion) #372
+
+1.7002  2014-04-27 07:45:53 CEST
+   [Bug Fixes]
+      - Bump fatpacked local::lib #364
+      - Fix a bug where build.log files are not properly renamed on the first run on Win32 (haarg) #368
 
 1.7001  2013-09-08 13:11:16 PDT
    [Bug Fixes]

@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-
+use 5.008000;
 
 use ExtUtils::MakeMaker ;
 
@@ -23,13 +23,13 @@ my %WriteMakefileArgs = (
   "NAME" => "App::cpanminus",
   "PREREQ_PM" => {
     "ExtUtils::Install" => "1.46",
-    "ExtUtils::MakeMaker" => "6.31",
-    "Module::Build" => "0.36"
+    "ExtUtils::MakeMaker" => "6.58",
+    "Module::Build" => "0.38"
   },
   "TEST_REQUIRES" => {
     "Test::More" => 0
   },
-  "VERSION" => "1.7006",
+  "VERSION" => "1.7005",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -38,8 +38,8 @@ my %WriteMakefileArgs = (
 
 my %FallbackPrereqs = (
   "ExtUtils::Install" => "1.46",
-  "ExtUtils::MakeMaker" => "6.31",
-  "Module::Build" => "0.36",
+  "ExtUtils::MakeMaker" => "6.58",
+  "Module::Build" => "0.38",
   "Test::More" => 0
 );
 

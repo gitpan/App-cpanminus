@@ -123,7 +123,8 @@ QUESTIONS
 
     *   Tests that require input from STDIN.
 
-    *   Tests that might fail when "AUTOMATED_TESTING" is enabled.
+    *   Build.PL or Makefile.PL that prompts for input when
+        "PERL_MM_USE_DEFAULT" is enabled.
 
     *   Modules that have invalid numeric values as VERSION (such as "1.1a")
 
