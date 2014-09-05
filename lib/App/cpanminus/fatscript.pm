@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7005";
+  our $VERSION = "1.7006";
   
   =encoding utf8
   
@@ -1466,7 +1466,6 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
           },
           'skip-configure!' => \$self->{skip_configure},
           'dev!'       => \$self->{dev_release},
-          'metacpan!'  => \$self->{metacpan},
           'report-perl-version!' => \$self->{report_perl_version},
           'configure-timeout=i' => \$self->{configure_timeout},
           'build-timeout=i' => \$self->{build_timeout},
@@ -1782,7 +1781,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
           };
       } elsif ($req !~ /\s/) {
           return {
-              range => { 'module.version_numified' => { 'gte' => $self->numify_ver($req) } },
+              range => { 'module.version_numified' => { 'gte' => $self->numify_ver_metacpan($req) } },
           };
       } else {
           my %ops = qw(< lt <= lte > gt >= gte);
@@ -1790,9 +1789,9 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
           my @requirements = split /,\s*/, $req;
           for my $r (@requirements) {
               if ($r =~ s/^([<>]=?)\s*//) {
-                  $range{$ops{$1}} = $self->numify_ver($r);
+                  $range{$ops{$1}} = $self->numify_ver_metacpan($r);
               } elsif ($r =~ s/\!=\s*//) {
-                  push @exclusion, $self->numify_ver($r);
+                  push @exclusion, $self->numify_ver_metacpan($r);
               }
           }
   
@@ -1802,7 +1801,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   
           if (@exclusion) {
               push @filters, {
-                  not => { or => [ map { +{ term => { 'module.version_numified' => $self->numify_ver($_) } } } @exclusion ] },
+                  not => { or => [ map { +{ term => { 'module.version_numified' => $self->numify_ver_metacpan($_) } } } @exclusion ] },
               };
           }
   
@@ -1810,9 +1809,17 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       }
   }
   
+  # Apparently MetaCPAN numifies devel releases by stripping _ first
+  sub numify_ver_metacpan {
+      my($self, $ver) = @_;
+      $ver =~ s/_//g;
+      version->new($ver)->numify;
+  }
+  
+  # version->new("1.00_00")->numify => "1.00_00" :/
   sub numify_ver {
       my($self, $ver) = @_;
-      version->new($ver)->numify;
+      eval version->new($ver)->numify;
   }
   
   sub maturity_filter {
@@ -1943,7 +1950,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       my $found;
       my $range = ($self->with_version_range($version) || $self->{dev_release});
   
-      if ($range or $self->{metacpan}) {
+      if ($range) {
           $found = $self->search_metacpan($module, $version)   and return $found;
           $found = $self->search_cpanmetadb($module, $version) and return $found;
       } else {
@@ -2252,7 +2259,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   sub bootstrap_local_lib_deps {
       my $self = shift;
       push @{$self->{bootstrap_deps}},
-          Dependency->new('ExtUtils::MakeMaker' => 6.31),
+          Dependency->new('ExtUtils::MakeMaker' => 6.58),
           Dependency->new('ExtUtils::Install'   => 1.46);
   }
   
