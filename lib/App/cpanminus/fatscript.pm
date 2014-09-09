@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7006";
+  our $VERSION = "1.7007";
   
   =encoding utf8
   
@@ -1896,16 +1896,17 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       my $module_uri = "$metacpan_uri/file/_search?source=";
       $module_uri .= $self->encode_json({
           query => $query,
-          fields => [ 'date', 'release', 'module', 'status' ],
+          fields => [ 'date', 'release', 'author', 'module', 'status' ],
       });
   
-      my($release, $module_version);
+      my($release, $author, $module_version);
   
       my $module_json = $self->get($module_uri);
       my $module_meta = eval { JSON::PP::decode_json($module_json) };
       my $match = $self->find_best_match($module_meta);
       if ($match) {
           $release = $match->{release};
+          $author = $match->{author};
           my $module_matched = (grep { $_->{name} eq $module } @{$match->{module}})[0];
           $module_version = $module_matched->{version};
       }
@@ -1917,9 +1918,10 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   
       my $dist_uri = "$metacpan_uri/release/_search?source=";
       $dist_uri .= $self->encode_json({
-          filter => {
-              term => { 'release.name' => $release },
-          },
+          filter => { and => [
+              { term => { 'release.name' => $release } },
+              { term => { 'release.author' => $author } },
+          ]},
           fields => [ 'download_url', 'stat', 'status' ],
       });
   
@@ -3638,7 +3640,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   
       my $try = sub {
           my $file = shift;
-          return 0 if $file =~ m!^(?:x?t|inc|local|perl5|fatlib)/!;
+          return 0 if $file =~ m!^(?:x?t|inc|local|perl5|fatlib|_build)/!;
           return 1 unless $meta->{no_index};
           return 0 if grep { $file =~ m!^$_/! } @{$meta->{no_index}{directory} || []};
           return 0 if grep { $file eq $_ } @{$meta->{no_index}{file} || []};
