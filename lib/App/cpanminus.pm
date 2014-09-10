@@ -1,5 +1,5 @@
 package App::cpanminus;
-our $VERSION = "1.7007";
+our $VERSION = "1.7008";
 
 =encoding utf8
 
@@ -215,8 +215,6 @@ The standalone executable contains the following modules embedded.
 =over 4
 
 =item L<CPAN::DistnameInfo> Copyright 2003 Graham Barr
-
-=item L<Parse::CPAN::Meta> Copyright 2006-2009 Adam Kennedy
 
 =item L<local::lib> Copyright 2007-2009 Matt S Trout
 

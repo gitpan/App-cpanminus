@@ -12,7 +12,7 @@ on test => sub {
 on develop => sub {
     requires 'App::FatPacker';
     requires 'CPAN::DistnameInfo';
-    requires 'CPAN::Meta';
+    requires 'CPAN::Meta', '2.132830';
     requires 'CPAN::Meta::Check';
     requires 'CPAN::Meta::Prereqs';
     requires 'CPAN::Meta::Requirements';
@@ -35,7 +35,6 @@ on develop => sub {
     requires 'String::ShellQuote';
     requires 'YAML';
     requires 'YAML::Tiny';
-    requires 'aliased';
     requires 'local::lib';
     requires 'version';
     requires 'Capture::Tiny';

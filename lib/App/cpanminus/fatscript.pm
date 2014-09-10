@@ -20,7 +20,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7007";
+  our $VERSION = "1.7008";
   
   =encoding utf8
   
@@ -236,8 +236,6 @@ $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'A
   =over 4
   
   =item L<CPAN::DistnameInfo> Copyright 2003 Graham Barr
-  
-  =item L<Parse::CPAN::Meta> Copyright 2006-2009 Adam Kennedy
   
   =item L<local::lib> Copyright 2007-2009 Matt S Trout
   
@@ -1265,6 +1263,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   use Config;
   use Cwd ();
   use App::cpanminus;
+  use App::cpanminus::Dependency;
   use File::Basename ();
   use File::Find ();
   use File::Path ();
@@ -1272,12 +1271,9 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   use File::Copy ();
   use File::Temp ();
   use Getopt::Long ();
-  use Parse::CPAN::Meta;
   use Symbol ();
   use String::ShellQuote ();
   use version ();
-  
-  use aliased 'App::cpanminus::Dependency';
   
   use constant WIN32 => $^O eq 'MSWin32';
   use constant BAD_TAR => ($^O eq 'solaris' || $^O eq 'hpux');
@@ -1560,11 +1556,6 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       }
   }
   
-  sub _exit {
-      my($self, $code) = @_;
-      die App::cpanminus::CommandExit->new($code);
-  }
-  
   sub doit {
       my $self = shift;
   
@@ -1572,12 +1563,8 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       eval {
           $code = ($self->_doit == 0);
       }; if (my $e = $@) {
-          if (ref $e eq 'App::cpanminus::CommandExit') {
-              $code = $e->code;
-          } else {
-              warn $e;
-              $code = 1;
-          }
+          warn $e;
+          $code = 1;
       }
   
       return $code;
@@ -1594,7 +1581,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
           $self->$action() and return 1;
       }
   
-      $self->show_help(1)
+      return $self->show_help(1)
           unless @{$self->{argv}} or $self->{load_from_stdin};
   
       $self->configure_mirrors;
@@ -1964,11 +1951,13 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   sub search_cpanmetadb {
       my($self, $module, $version) = @_;
   
+      require CPAN::Meta::YAML;
+  
       $self->chat("Searching $module on cpanmetadb ...\n");
   
       (my $uri = $self->{cpanmetadb}) =~ s{/?$}{/package/$module};
       my $yaml = $self->get($uri);
-      my $meta = $self->parse_meta_string($yaml);
+      my $meta = eval { CPAN::Meta::YAML::Load($yaml) };
       if ($meta && $meta->{distfile}) {
           return $self->cpan_module($module, $meta->{distfile}, $meta->{version});
       }
@@ -2077,7 +2066,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   
   Try `cpanm --help` or `man cpanm` for more options.
   USAGE
-          $self->_exit(1);
+          return;
       }
   
       print <<HELP;
@@ -2261,8 +2250,8 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   sub bootstrap_local_lib_deps {
       my $self = shift;
       push @{$self->{bootstrap_deps}},
-          Dependency->new('ExtUtils::MakeMaker' => 6.58),
-          Dependency->new('ExtUtils::Install'   => 1.46);
+          App::cpanminus::Dependency->new('ExtUtils::MakeMaker' => 6.58),
+          App::cpanminus::Dependency->new('ExtUtils::Install'   => 1.46);
   }
   
   sub prompt_bool {
@@ -3355,21 +3344,16 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       $dist->{meta} = $dist->{cpanmeta} ? $dist->{cpanmeta}->as_struct : {};
   
       my @config_deps;
-  
       if ($dist->{cpanmeta}) {
-          push @config_deps, Dependency->from_prereqs(
+          push @config_deps, App::cpanminus::Dependency->from_prereqs(
               $dist->{cpanmeta}->effective_prereqs, ['configure'], $self->{install_types},
-          );
-      } else {
-          push @config_deps, Dependency->from_versions(
-              $dist->{meta}{configure_requires} || {}, 'configure',
           );
       }
   
       # workaround for bad M::B based dists with no configure_requires
       # https://github.com/miyagawa/cpanminus/issues/273
       if (-e 'Build.PL' && !$self->should_use_mm($dist->{dist}) && !@config_deps) {
-          push @config_deps, Dependency->from_versions(
+          push @config_deps, App::cpanminus::Dependency->from_versions(
               { 'Module::Build' => '0.36' }, 'configure',
           );
       }
@@ -3500,7 +3484,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       my @perl;
       for my $requires (grep defined, @requires) {
           if (exists $requires->{perl}) {
-              push @perl, Dependency->new(perl => $requires->{perl});
+              push @perl, App::cpanminus::Dependency->new(perl => $requires->{perl});
           }
       }
   
@@ -3794,28 +3778,19 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       if ($dist->{cpanfile}) {
           my @features = $self->configure_features($dist, $dist->{cpanfile}->features);
           my $prereqs = $dist->{cpanfile}->prereqs_with(@features);
-          return Dependency->from_prereqs($prereqs, $dist->{want_phases}, $self->{install_types});
+          return App::cpanminus::Dependency->from_prereqs($prereqs, $dist->{want_phases}, $self->{install_types});
       }
   
-      my $meta = $dist->{meta};
+      require CPAN::Meta;
   
       my @deps;
-      if (-e "MYMETA.json") {
-          require JSON::PP;
-          $self->chat("Checking dependencies from MYMETA.json ...\n");
-          my $json = do { open my $in, "<MYMETA.json"; local $/; <$in> };
-          my $mymeta = JSON::PP::decode_json($json);
+      my($meta_file) = grep -f, qw(MYMETA.json MYMETA.yml);
+      if ($meta_file) {
+          $self->chat("Checking dependencies from $meta_file ...\n");
+          my $mymeta = eval { CPAN::Meta->load_file($meta_file, { lazy_validation => 1 }) };
           if ($mymeta) {
-              $meta->{$_} = $mymeta->{$_} for qw(name version);
-              return $self->extract_prereqs($mymeta, $dist);
-          }
-      }
-  
-      if (-e 'MYMETA.yml') {
-          $self->chat("Checking dependencies from MYMETA.yml ...\n");
-          my $mymeta = $self->parse_meta('MYMETA.yml');
-          if ($mymeta) {
-              $meta->{$_} = $mymeta->{$_} for qw(name version);
+              $dist->{meta}{name}    = $mymeta->name;
+              $dist->{meta}{version} = $mymeta->version;
               return $self->extract_prereqs($mymeta, $dist);
           }
       }
@@ -3823,7 +3798,11 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       if (-e '_build/prereqs') {
           $self->chat("Checking dependencies from _build/prereqs ...\n");
           my $prereqs = do { open my $in, "_build/prereqs"; $self->safe_eval(join "", <$in>) };
-          @deps = $self->extract_prereqs({ name => $meta->{name}, version => $meta->{version}, %$prereqs }, $dist);
+          my $meta = CPAN::Meta->new(
+              { name => $dist->{meta}{name}, version => $dist->{meta}{version}, %$prereqs },
+              { lazy_validation => 1 },
+          );
+          @deps = $self->extract_prereqs($meta, $dist);
       } elsif (-e 'Makefile') {
           $self->chat("Finding PREREQ from Makefile ...\n");
           open my $mf, "Makefile";
@@ -3837,7 +3816,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
                   }
                   my $list = join ", ", map { "'$_->[0]' => $_->[1]" } @all;
                   my $prereq = $self->safe_eval("no strict; +{ $list }");
-                  push @deps, Dependency->from_versions($prereq) if $prereq;
+                  push @deps, App::cpanminus::Dependency->from_versions($prereq) if $prereq;
                   last;
               }
           }
@@ -3867,7 +3846,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
                   $in_contents = 0;
               } elsif ($in_contents) {
                   /^(\S+)\s*(\S+)?/
-                      and push @deps, Dependency->new($1, $self->maybe_version($2));
+                      and push @deps, App::cpanminus::Dependency->new($1, $self->maybe_version($2));
               }
           }
       }
@@ -3881,13 +3860,10 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   }
   
   sub extract_prereqs {
-      my($self, $metadata, $dist) = @_;
+      my($self, $meta, $dist) = @_;
   
-      require CPAN::Meta;
-      my $meta = CPAN::Meta->new($metadata, { lazy_validation => 1 });
       my @features = $self->configure_features($dist, $meta->features);
-  
-      return Dependency->from_prereqs($meta->effective_prereqs(\@features), $dist->{want_phases}, $self->{install_types});
+      return App::cpanminus::Dependency->from_prereqs($meta->effective_prereqs(\@features), $dist->{want_phases}, $self->{install_types});
   }
   
   sub cleanup_workdirs {
@@ -4313,26 +4289,9 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   
   sub mask_uri_passwords {
       my($self, @strings) = @_;
-      s{ (https?://) ([^:/]+) : [^@/]+ @ }{$1$2:*password*@}gx for @strings;
+      s{ (https?://) ([^:/]+) : [^@/]+ @ }{$1$2:********@}gx for @strings;
       return @strings;
   }
-  
-  sub parse_meta {
-      my($self, $file) = @_;
-      return eval { Parse::CPAN::Meta->load_file($file) };
-  }
-  
-  sub parse_meta_string {
-      my($self, $yaml) = @_;
-      return eval { Parse::CPAN::Meta->load_yaml_string($yaml) };
-  }
-  
-  package App::cpanminus::CommandExit;
-  sub new {
-      bless { code => $_[1] }, $_[0];
-  }
-  
-  sub code { $_[0]->{code} }
   
   1;
 APP_CPANMINUS_SCRIPT
@@ -20910,354 +20869,6 @@ $fatpacked{"Module/Metadata.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
 MODULE_METADATA
 
-$fatpacked{"Parse/CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PARSE_CPAN_META';
-  use 5.008001;
-  use strict;
-  package Parse::CPAN::Meta;
-  # ABSTRACT: Parse META.yml and META.json CPAN metadata files
-  our $VERSION = '1.4414'; # VERSION
-  
-  use Exporter;
-  use Carp 'croak';
-  
-  our @ISA = qw/Exporter/;
-  our @EXPORT_OK = qw/Load LoadFile/;
-  
-  sub load_file {
-    my ($class, $filename) = @_;
-  
-    my $meta = _slurp($filename);
-  
-    if ($filename =~ /\.ya?ml$/) {
-      return $class->load_yaml_string($meta);
-    }
-    elsif ($filename =~ /\.json$/) {
-      return $class->load_json_string($meta);
-    }
-    else {
-      $class->load_string($meta); # try to detect yaml/json
-    }
-  }
-  
-  sub load_string {
-    my ($class, $string) = @_;
-    if ( $string =~ /^---/ ) { # looks like YAML
-      return $class->load_yaml_string($string);
-    }
-    elsif ( $string =~ /^\s*\{/ ) { # looks like JSON
-      return $class->load_json_string($string);
-    }
-    else { # maybe doc-marker-free YAML
-      return $class->load_yaml_string($string);
-    }
-  }
-  
-  sub load_yaml_string {
-    my ($class, $string) = @_;
-    my $backend = $class->yaml_backend();
-    my $data = eval { no strict 'refs'; &{"$backend\::Load"}($string) };
-    croak $@ if $@;
-    return $data || {}; # in case document was valid but empty
-  }
-  
-  sub load_json_string {
-    my ($class, $string) = @_;
-    my $data = eval { $class->json_backend()->new->decode($string) };
-    croak $@ if $@;
-    return $data || {};
-  }
-  
-  sub yaml_backend {
-    if (! defined $ENV{PERL_YAML_BACKEND} ) {
-      _can_load( 'CPAN::Meta::YAML', 0.011 )
-        or croak "CPAN::Meta::YAML 0.011 is not available\n";
-      return "CPAN::Meta::YAML";
-    }
-    else {
-      my $backend = $ENV{PERL_YAML_BACKEND};
-      _can_load( $backend )
-        or croak "Could not load PERL_YAML_BACKEND '$backend'\n";
-      $backend->can("Load")
-        or croak "PERL_YAML_BACKEND '$backend' does not implement Load()\n";
-      return $backend;
-    }
-  }
-  
-  sub json_backend {
-    if (! $ENV{PERL_JSON_BACKEND} or $ENV{PERL_JSON_BACKEND} eq 'JSON::PP') {
-      _can_load( 'JSON::PP' => 2.27103 )
-        or croak "JSON::PP 2.27103 is not available\n";
-      return 'JSON::PP';
-    }
-    else {
-      _can_load( 'JSON' => 2.5 )
-        or croak  "JSON 2.5 is required for " .
-                  "\$ENV{PERL_JSON_BACKEND} = '$ENV{PERL_JSON_BACKEND}'\n";
-      return "JSON";
-    }
-  }
-  
-  sub _slurp {
-    require Encode;
-    open my $fh, "<:raw", "$_[0]" ## no critic
-      or die "can't open $_[0] for reading: $!";
-    my $content = do { local $/; <$fh> };
-    $content = Encode::decode('UTF-8', $content, Encode::PERLQQ());
-    return $content;
-  }
-    
-  sub _can_load {
-    my ($module, $version) = @_;
-    (my $file = $module) =~ s{::}{/}g;
-    $file .= ".pm";
-    return 1 if $INC{$file};
-    return 0 if exists $INC{$file}; # prior load failed
-    eval { require $file; 1 }
-      or return 0;
-    if ( defined $version ) {
-      eval { $module->VERSION($version); 1 }
-        or return 0;
-    }
-    return 1;
-  }
-  
-  # Kept for backwards compatibility only
-  # Create an object from a file
-  sub LoadFile ($) {
-    return Load(_slurp(shift));
-  }
-  
-  # Parse a document from a string.
-  sub Load ($) {
-    require CPAN::Meta::YAML;
-    my $object = eval { CPAN::Meta::YAML::Load(shift) };
-    croak $@ if $@;
-    return $object;
-  }
-  
-  1;
-  
-  __END__
-  
-  =pod
-  
-  =encoding UTF-8
-  
-  =head1 NAME
-  
-  Parse::CPAN::Meta - Parse META.yml and META.json CPAN metadata files
-  
-  =head1 VERSION
-  
-  version 1.4414
-  
-  =head1 SYNOPSIS
-  
-      #############################################
-      # In your file
-      
-      ---
-      name: My-Distribution
-      version: 1.23
-      resources:
-        homepage: "http://example.com/dist/My-Distribution"
-      
-      
-      #############################################
-      # In your program
-      
-      use Parse::CPAN::Meta;
-      
-      my $distmeta = Parse::CPAN::Meta->load_file('META.yml');
-      
-      # Reading properties
-      my $name     = $distmeta->{name};
-      my $version  = $distmeta->{version};
-      my $homepage = $distmeta->{resources}{homepage};
-  
-  =head1 DESCRIPTION
-  
-  B<Parse::CPAN::Meta> is a parser for F<META.json> and F<META.yml> files, using
-  L<JSON::PP> and/or L<CPAN::Meta::YAML>.
-  
-  B<Parse::CPAN::Meta> provides three methods: C<load_file>, C<load_json_string>,
-  and C<load_yaml_string>.  These will read and deserialize CPAN metafiles, and
-  are described below in detail.
-  
-  B<Parse::CPAN::Meta> provides a legacy API of only two functions,
-  based on the YAML functions of the same name. Wherever possible,
-  identical calling semantics are used.  These may only be used with YAML sources.
-  
-  All error reporting is done with exceptions (die'ing).
-  
-  Note that META files are expected to be in UTF-8 encoding, only.  When
-  converted string data, it must first be decoded from UTF-8.
-  
-  =begin Pod::Coverage
-  
-  
-  
-  
-  =end Pod::Coverage
-  
-  =head1 METHODS
-  
-  =head2 load_file
-  
-    my $metadata_structure = Parse::CPAN::Meta->load_file('META.json');
-  
-    my $metadata_structure = Parse::CPAN::Meta->load_file('META.yml');
-  
-  This method will read the named file and deserialize it to a data structure,
-  determining whether it should be JSON or YAML based on the filename.
-  The file will be read using the ":utf8" IO layer.
-  
-  =head2 load_yaml_string
-  
-    my $metadata_structure = Parse::CPAN::Meta->load_yaml_string($yaml_string);
-  
-  This method deserializes the given string of YAML and returns the first
-  document in it.  (CPAN metadata files should always have only one document.)
-  If the source was UTF-8 encoded, the string must be decoded before calling
-  C<load_yaml_string>.
-  
-  =head2 load_json_string
-  
-    my $metadata_structure = Parse::CPAN::Meta->load_json_string($json_string);
-  
-  This method deserializes the given string of JSON and the result.  
-  If the source was UTF-8 encoded, the string must be decoded before calling
-  C<load_json_string>.
-  
-  =head2 load_string
-  
-    my $metadata_structure = Parse::CPAN::Meta->load_string($some_string);
-  
-  If you don't know whether a string contains YAML or JSON data, this method
-  will use some heuristics and guess.  If it can't tell, it assumes YAML.
-  
-  =head2 yaml_backend
-  
-    my $backend = Parse::CPAN::Meta->yaml_backend;
-  
-  Returns the module name of the YAML serializer. See L</ENVIRONMENT>
-  for details.
-  
-  =head2 json_backend
-  
-    my $backend = Parse::CPAN::Meta->json_backend;
-  
-  Returns the module name of the JSON serializer.  This will either
-  be L<JSON::PP> or L<JSON>.  Even if C<PERL_JSON_BACKEND> is set,
-  this will return L<JSON> as further delegation is handled by
-  the L<JSON> module.  See L</ENVIRONMENT> for details.
-  
-  =head1 FUNCTIONS
-  
-  For maintenance clarity, no functions are exported by default.  These functions
-  are available for backwards compatibility only and are best avoided in favor of
-  C<load_file>.
-  
-  =head2 Load
-  
-    my @yaml = Parse::CPAN::Meta::Load( $string );
-  
-  Parses a string containing a valid YAML stream into a list of Perl data
-  structures.
-  
-  =head2 LoadFile
-  
-    my @yaml = Parse::CPAN::Meta::LoadFile( 'META.yml' );
-  
-  Reads the YAML stream from a file instead of a string.
-  
-  =head1 ENVIRONMENT
-  
-  =head2 PERL_JSON_BACKEND
-  
-  By default, L<JSON::PP> will be used for deserializing JSON data. If the
-  C<PERL_JSON_BACKEND> environment variable exists, is true and is not
-  "JSON::PP", then the L<JSON> module (version 2.5 or greater) will be loaded and
-  used to interpret C<PERL_JSON_BACKEND>.  If L<JSON> is not installed or is too
-  old, an exception will be thrown.
-  
-  =head2 PERL_YAML_BACKEND
-  
-  By default, L<CPAN::Meta::YAML> will be used for deserializing YAML data. If
-  the C<PERL_YAML_BACKEND> environment variable is defined, then it is interpreted
-  as a module to use for deserialization.  The given module must be installed,
-  must load correctly and must implement the C<Load()> function or an exception
-  will be thrown.
-  
-  =for :stopwords cpan testmatrix url annocpan anno bugtracker rt cpants kwalitee diff irc mailto metadata placeholders metacpan
-  
-  =head1 SUPPORT
-  
-  =head2 Bugs / Feature Requests
-  
-  Please report any bugs or feature requests through the issue tracker
-  at L<http://rt.cpan.org/Public/Dist/Display.html?Name=Parse-CPAN-Meta>.
-  You will be notified automatically of any progress on your issue.
-  
-  =head2 Source Code
-  
-  This is open source software.  The code repository is available for
-  public review and contribution under the terms of the license.
-  
-  L<https://github.com/Perl-Toolchain-Gang/Parse-CPAN-Meta>
-  
-    git clone https://github.com/Perl-Toolchain-Gang/Parse-CPAN-Meta.git
-  
-  =head1 AUTHORS
-  
-  =over 4
-  
-  =item *
-  
-  Adam Kennedy <adamk@cpan.org>
-  
-  =item *
-  
-  David Golden <dagolden@cpan.org>
-  
-  =back
-  
-  =head1 CONTRIBUTORS
-  
-  =over 4
-  
-  =item *
-  
-  Graham Knop <haarg@haarg.org>
-  
-  =item *
-  
-  Joshua ben Jore <jjore@cpan.org>
-  
-  =item *
-  
-  Neil Bowers <neil@bowers.com>
-  
-  =item *
-  
-  Ricardo Signes <rjbs@cpan.org>
-  
-  =item *
-  
-  Steffen Mueller <smueller@cpan.org>
-  
-  =back
-  
-  =head1 COPYRIGHT AND LICENSE
-  
-  This software is copyright (c) 2014 by Adam Kennedy and Contributors.
-  
-  This is free software; you can redistribute it and/or modify it under
-  the same terms as the Perl 5 programming language system itself.
-  
-  =cut
-PARSE_CPAN_META
-
 $fatpacked{"String/ShellQuote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'STRING_SHELLQUOTE';
   # $Id: ShellQuote.pm,v 1.11 2010-06-11 20:08:57 roderick Exp $
   #
@@ -21456,338 +21067,6 @@ $fatpacked{"String/ShellQuote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =cut
 STRING_SHELLQUOTE
-
-$fatpacked{"aliased.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'ALIASED';
-  package aliased;
-  
-  our $VERSION = '0.31';
-  $VERSION = eval $VERSION;
-  
-  require Exporter;
-  @ISA    = qw(Exporter);
-  @EXPORT = qw(alias prefix);
-  
-  use strict;
-  
-  sub _croak {
-      require Carp;
-      Carp::croak(@_);
-  }
-  
-  sub import {
-      my ( $class, $package, $alias, @import ) = @_;
-  
-      if ( @_ <= 1 ) {
-          $class->export_to_level(1);
-          return;
-      }
-  
-      my $callpack = caller(0);
-      _load_alias( $package, $callpack, @import );
-      _make_alias( $package, $callpack, $alias );
-  }
-  
-  sub _get_alias {
-      my $package = shift;
-      $package =~ s/.*(?:::|')//;
-      return $package;
-  }
-  
-  sub _make_alias {
-      my ( $package, $callpack, $alias ) = @_;
-  
-      $alias ||= _get_alias($package);
-  
-      my $destination = $alias =~ /::/
-        ? $alias
-        : "$callpack\::$alias";
-  
-      no strict 'refs';
-      *{ $destination } = sub () { $package };
-  }
-  
-  sub _load_alias {
-      my ( $package, $callpack, @import ) = @_;
-  
-      # We don't localize $SIG{__DIE__} here because we need to be careful about
-      # restoring its value if there is a failure.  Very, very tricky.
-      my $sigdie = $SIG{__DIE__};
-      {
-          my $code =
-            @import == 0
-            ? "package $callpack; use $package;"
-            : "package $callpack; use $package (\@import)";
-          eval $code;
-          if ( my $error = $@ ) {
-              $SIG{__DIE__} = $sigdie;
-              _croak($error);
-          }
-          $sigdie = $SIG{__DIE__}
-            if defined $SIG{__DIE__};
-      }
-  
-      # Make sure a global $SIG{__DIE__} makes it out of the localization.
-      $SIG{__DIE__} = $sigdie if defined $sigdie;
-      return $package;
-  }
-  
-  sub alias {
-      my ( $package, @import ) = @_;
-  
-      my $callpack = scalar caller(0);
-      return _load_alias( $package, $callpack, @import );
-  }
-  
-  sub prefix {
-      my ($class) = @_;
-      return sub {
-          my ($name) = @_;
-          my $callpack = caller(0);
-          if ( not @_ ) {
-              return _load_alias( $class, $callpack );
-          }
-          elsif ( @_ == 1 && defined $name ) {
-              return _load_alias( "${class}::$name", $callpack );
-          }
-          else {
-              _croak("Too many arguments to prefix('$class')");
-          }
-      };
-  }
-  
-  1;
-  __END__
-  
-  =head1 NAME
-  
-  aliased - Use shorter versions of class names.
-  
-  =head1 VERSION
-  
-  0.31
-  
-  =head1 SYNOPSIS
-  
-    # Class name interface
-    use aliased 'My::Company::Namespace::Customer';
-    my $cust = Customer->new;
-  
-    use aliased 'My::Company::Namespace::Preferred::Customer' => 'Preferred';
-    my $pref = Preferred->new;
-  
-  
-    # Variable interface
-    use aliased;
-    my $Customer  = alias "My::Other::Namespace::Customer";
-    my $cust      = $Customer->new;
-  
-    my $Preferred = alias "My::Other::Namespace::Preferred::Customer";
-    my $pref      = $Preferred->new;  
-  
-  
-  =head1 DESCRIPTION
-  
-  C<aliased> is simple in concept but is a rather handy module.  It loads the
-  class you specify and exports into your namespace a subroutine that returns
-  the class name.  You can explicitly alias the class to another name or, if you
-  prefer, you can do so implicitly.  In the latter case, the name of the
-  subroutine is the last part of the class name.  Thus, it does something
-  similar to the following:
-  
-    #use aliased 'Some::Annoyingly::Long::Module::Name::Customer';
-  
-    use Some::Annoyingly::Long::Module::Name::Customer;
-    sub Customer {
-      return 'Some::Annoyingly::Long::Module::Name::Customer';
-    }
-    my $cust = Customer->new;
-  
-  This module is useful if you prefer a shorter name for a class.  It's also
-  handy if a class has been renamed.
-  
-  (Some may object to the term "aliasing" because we're not aliasing one
-  namespace to another, but it's a handy term.  Just keep in mind that this is
-  done with a subroutine and not with typeglobs and weird namespace munging.)
-  
-  Note that this is B<only> for C<use>ing OO modules.  You cannot use this to
-  load procedural modules.  See the L<Why OO Only?|Why OO Only?> section.  Also,
-  don't let the version number fool you.  This code is ridiculously simple and
-  is just fine for most use.
-  
-  =head2 Implicit Aliasing
-  
-  The most common use of this module is:
-  
-    use aliased 'Some::Module::name';
-  
-  C<aliased> will  allow you to reference the class by the last part of the
-  class name.  Thus, C<Really::Long::Name> becomes C<Name>.  It does this by
-  exporting a subroutine into your namespace with the same name as the aliased
-  name.  This subroutine returns the original class name.
-  
-  For example:
-  
-    use aliased "Acme::Company::Customer";
-    my $cust = Customer->find($id);
-  
-  Note that any class method can be called on the shorter version of the class
-  name, not just the constructor.
-  
-  =head2 Explicit Aliasing
-  
-  Sometimes two class names can cause a conflict (they both end with C<Customer>
-  for example), or you already have a subroutine with the same name as the
-  aliased name.  In that case, you can make an explicit alias by stating the
-  name you wish to alias to:
-  
-    use aliased 'Original::Module::Name' => 'NewName';
-  
-  Here's how we use C<aliased> to avoid conflicts:
-  
-    use aliased "Really::Long::Name";
-    use aliased "Another::Really::Long::Name" => "Aname";
-    my $name  = Name->new;
-    my $aname = Aname->new;
-  
-  You can even alias to a different package:
-  
-    use aliased "Another::Really::Long::Name" => "Another::Name";
-    my $aname = Another::Name->new;
-  
-  Messing around with different namespaces is a really bad idea and you probably
-  don't want to do this.  However, it might prove handy if the module you are
-  using has been renamed.  If the interface has not changed, this allows you to
-  use the new module by only changing one line of code.
-  
-    use aliased "New::Module::Name" => "Old::Module::Name";
-    my $thing = Old::Module::Name->new;
-  
-  =head2 Import Lists
-  
-  Sometimes, even with an OO module, you need to specify extra arguments when
-  using the module.  When this happens, simply use L<Explicit Aliasing> followed
-  by the import list:
-  
-  Snippet 1:
-  
-    use Some::Module::Name qw/foo bar/;
-    my $o = Some::Module::Name->some_class_method; 
-  
-  Snippet 2 (equivalent to snippet 1):
-  
-    use aliased 'Some::Module::Name' => 'Name', qw/foo bar/;
-    my $o = Name->some_class_method;
-  
-  B<Note>:  remember, you cannot use import lists with L<Implicit Aliasing>.  As
-  a result, you may simply prefer to only use L<Explicit Aliasing> as a matter
-  of style.
-  
-  =head2 alias()
-  
-  This function is only exported if you specify C<use aliased> with no import
-  list.
-  
-      use aliased;
-      my $alias = alias($class);
-      my $alias = alias($class, @imports);
-  
-  alias() is an alternative to C<use aliased ...> which uses less magic and
-  avoids some of the ambiguities.
-  
-  Like C<use aliased> it C<use>s the $class (pass in @imports, if given) but
-  instead of providing an C<Alias> constant it simply returns a scalar set to
-  the $class name.
-  
-      my $thing = alias("Some::Thing::With::A::Long::Name");
-  
-      # Just like Some::Thing::With::A::Long::Name->method
-      $thing->method;
-  
-  The use of a scalar instead of a constant avoids any possible ambiguity
-  when aliasing two similar names:
-  
-      # No ambiguity despite the fact that they both end with "Name"
-      my $thing = alias("Some::Thing::With::A::Long::Name");
-      my $other = alias("Some::Other::Thing::With::A::Long::Name");
-  
-  and there is no magic constant exported into your namespace.
-  
-  The only caveat is loading of the $class happens at run time.  If $class
-  exports anything you might want to ensure it is loaded at compile time with:
-  
-      my $thing;
-      BEGIN { $thing = alias("Some::Thing"); }
-  
-  However, since OO classes rarely export this should not be necessary.
-  
-  =head2 prefix() (experimental)
-  
-  This function is only exported if you specify C<use aliased> with no import
-  list.
-  
-      use aliased;
-  
-  Sometimes you find you have a ton of packages in the same top-level namespace
-  and you want to alias them, but only use them on demand.  For example:
-  
-      # instead of:
-      MailVerwaltung::Client::Exception::REST::Response->throw()
-  
-      my $error = prefix('MailVerwaltung::Client::Exception');
-      $error->('REST::Response')->throw();   # same as above
-      $error->()->throw; # same as MailVerwaltung::Client::Exception->throw
-  
-  =head2 Why OO Only?
-  
-  Some people have asked why this code only support object-oriented modules
-  (OO).  If I were to support normal subroutines, I would have to allow the
-  following syntax:
-  
-    use aliased 'Some::Really::Long::Module::Name';
-    my $data = Name::data();
-  
-  That causes a serious problem.  The only (reasonable) way it can be done is to
-  handle the aliasing via typeglobs.  Thus, instead of a subroutine that
-  provides the class name, we alias one package to another (as the
-  L<namespace|namespace> module does.)  However, we really don't want to simply
-  alias one package to another and wipe out namespaces willy-nilly.  By merely
-  exporting a single subroutine to a namespace, we minimize the issue. 
-  
-  Fortunately, this doesn't seem to be that much of a problem.  Non-OO modules
-  generally support exporting of the functions you need and this eliminates the
-  need for a module such as this.
-  
-  =head1 EXPORT
-  
-  This modules exports a subroutine with the same name as the "aliased" name.
-  
-  =head1 BUGS
-  
-  There are no known bugs in this module, but feel free to email me reports.
-  
-  =head1 SEE ALSO
-  
-  The L<namespace> module.
-  
-  =head1 THANKS
-  
-  Many thanks to Rentrak, Inc. (http://www.rentrak.com/) for graciously allowing
-  me to replicate the functionality of some of their internal code.
-  
-  =head1 AUTHOR
-  
-  Curtis Poe, C<< ovid [at] cpan [dot] org >>
-  
-  =head1 COPYRIGHT AND LICENSE
-  
-  Copyright (C) 2005 by Curtis "Ovid" Poe
-  
-  This library is free software; you can redistribute it and/or modify
-  it under the same terms as Perl itself, either Perl version 5.8.5 or,
-  at your option, any later version of Perl 5 you may have available.
-  
-  =cut
-ALIASED
 
 $fatpacked{"lib/core/only.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'LIB_CORE_ONLY';
   package lib::core::only;
