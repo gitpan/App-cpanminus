@@ -7,7 +7,7 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: '0'
 dynamic_config: 0
-generated_by: 'Dist::Milla version v1.0.5, Dist::Zilla version 5.020, CPAN::Meta::Converter version 2.142060'
+generated_by: 'Dist::Milla version v1.0.8, Dist::Zilla version 5.020, CPAN::Meta::Converter version 2.142060'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -32,7 +32,7 @@ resources:
   bugtracker: https://github.com/miyagawa/cpanminus/issues
   homepage: https://github.com/miyagawa/cpanminus
   repository: https://github.com/miyagawa/cpanminus.git
-version: '1.7009'
+version: '1.7010'
 x_contributors:
   - 'Alessandro Ghedini <al3xbio@gmail.com>'
   - 'Andrew Rodland <andrew@cleverdomain.org>'
@@ -42,7 +42,7 @@ x_contributors:
   - 'Breno G. de Oliveira <garu@cpan.org>'
   - 'Brian Wightman <MidLifeXis@wightmanfam.org>'
   - 'Christian Walde <walde.christian@googlemail.com>'
-  - 'Dagfinn Ilmari Mannsåker <ilmari@ilmari.org>'
+  - 'Dagfinn Ilmari Mannsaker <ilmari@ilmari.org>'
   - 'Dana M. Diederich <diederich@gmail.com>'
   - 'Dave Goodell <davidjgoodell@gmail.com>'
   - 'Dave Rolsky <autarch@urth.org>'
@@ -67,6 +67,7 @@ x_contributors:
   - 'Michael G. Schwern <schwern@pobox.com>'
   - 'Norman Nunley <nnunley@gmail.com>'
   - 'Olaf Alders <olaf@wundersolutions.com>'
+  - 'Olivier Mengue <dolmen@cpan.org>'
   - 'Pedro Melo <melo@simplicidade.org>'
   - 'Rafal Pocztarski <r.pocztarski@gmail.com>'
   - 'Ricardo Signes <rjbs@cpan.org>'
