@@ -21,7 +21,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7011";
+  our $VERSION = "1.7012";
   
   =encoding utf8
   
@@ -2394,12 +2394,23 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       return $Module::CoreList::version{$]+0}{$module};
   }
   
+  sub search_inc {
+      my $self = shift;
+      $self->{search_inc} ||= do {
+          # strip lib/ and fatlib/ from search path when booted from dev
+          if (defined $::Bin) {
+              [grep !/^\Q$::Bin\E\/..\/(?:fat)?lib$/, @INC]
+          } else {
+              [@INC]
+          }
+      };
+  }
   
   sub check_module {
       my($self, $mod, $want_ver) = @_;
   
       require Module::Metadata;
-      my $meta = Module::Metadata->new_from_module($mod, inc => $self->{search_inc})
+      my $meta = Module::Metadata->new_from_module($mod, inc => $self->search_inc)
           or return 0, undef;
   
       my $version = $meta->version;
@@ -3745,8 +3756,8 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   use strict;
   use warnings;
   package CPAN::Meta;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::VERSION = '2.142690';
   #pod =head1 SYNOPSIS
   #pod
   #pod     use v5.10;
@@ -4384,7 +4395,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 SYNOPSIS
   
@@ -4763,6 +4774,8 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =head1 CONTRIBUTORS
   
+  =for stopwords Ansgar Burchardt Avar Arnfjord Bjarmason Christopher J. Madsen Chuck Adams Cory G Watson Damyan Ivanov Eric Wilhelm Graham Knop Gregor Hermann Karen Etheridge Kenichi Ishigaki Ken Williams Lars Dieckow Leon Timmermans majensen Mark Fowler Matt S Trout Michael G. Schwern moznion Olaf Alders Olivier Mengue Randy Sims
+  
   =over 4
   
   =item *
@@ -4795,6 +4808,10 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =item *
   
+  Graham Knop <haarg@haarg.org>
+  
+  =item *
+  
   Gregor Hermann <gregoa@debian.org>
   
   =item *
@@ -4803,11 +4820,11 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =item *
   
-  Ken Williams <kwilliams@cpan.org>
+  Kenichi Ishigaki <ishigaki@cpan.org>
   
   =item *
   
-  Kenichi Ishigaki <ishigaki@cpan.org>
+  Ken Williams <kwilliams@cpan.org>
   
   =item *
   
@@ -4816,6 +4833,10 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   =item *
   
   Leon Timmermans <leont@cpan.org>
+  
+  =item *
+  
+  majensen <maj@fortinbras.us>
   
   =item *
   
@@ -4831,6 +4852,10 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =item *
   
+  moznion <moznion@gmail.com>
+  
+  =item *
+  
   Olaf Alders <olaf@wundersolutions.com>
   
   =item *
@@ -4840,10 +4865,6 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   =item *
   
   Randy Sims <randys@thepierianspring.org>
-  
-  =item *
-  
-  moznion <moznion@gmail.com>
   
   =back
   
@@ -4996,8 +5017,8 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   use strict;
   use warnings;
   package CPAN::Meta::Converter;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::Converter::VERSION = '2.142690';
   #pod =head1 SYNOPSIS
   #pod
   #pod   my $struct = decode_json_file('META.json');
@@ -5018,8 +5039,23 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   use CPAN::Meta::Validator;
   use CPAN::Meta::Requirements;
-  use version 0.88 ();
   use Parse::CPAN::Meta 1.4400 ();
+  
+  # To help ExtUtils::MakeMaker bootstrap CPAN::Meta::Requirements on perls
+  # before 5.10, we fall back to the EUMM bundled compatibility version module if
+  # that's the only thing available.  This shouldn't ever happen in a normal CPAN
+  # install of CPAN::Meta::Requirements, as version.pm will be picked up from
+  # prereqs and be available at runtime.
+  
+  BEGIN {
+    eval "use version ()"; ## no critic
+    if ( my $err = $@ ) {
+      eval "use ExtUtils::MakeMaker::version" or die $err; ## no critic
+    }
+  }
+  
+  # Perl 5.10.0 didn't have "is_qv" in version.pm
+  *_is_qv = version->can('is_qv') ? sub { $_[0]->is_qv } : sub { exists $_[0]->{qv} };
   
   sub _dclone {
     my $ref = shift;
@@ -5357,7 +5393,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
     # XXX check defined $v and not just $v because version objects leak memory
     # in boolean context -- dagolden, 2012-02-03
     if ( defined $v ) {
-      return $v->is_qv ? $v->normal : $element;
+      return _is_qv($v) ? $v->normal : $element;
     }
     else {
       return 0;
@@ -5367,8 +5403,8 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   sub _bad_version_hook {
     my ($v) = @_;
     $v =~ s{[a-z]+$}{}; # strip trailing alphabetics
-    my $vobj = eval { version->parse($v) };
-    return defined($vobj) ? $vobj : version->parse(0); # or give up
+    my $vobj = eval { version->new($v) };
+    return defined($vobj) ? $vobj : version->new(0); # or give up
   }
   
   sub _version_map {
@@ -6473,7 +6509,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 SYNOPSIS
   
@@ -6616,8 +6652,8 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use strict;
   use warnings;
   package CPAN::Meta::Feature;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::Feature::VERSION = '2.142690';
   use CPAN::Meta::Prereqs;
   
   #pod =head1 DESCRIPTION
@@ -6692,7 +6728,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 DESCRIPTION
   
@@ -6765,8 +6801,8 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use strict;
   use warnings;
   package CPAN::Meta::History;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::History::VERSION = '2.142690';
   1;
   
   # ABSTRACT: history of CPAN Meta Spec changes
@@ -6783,7 +6819,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 DESCRIPTION
   
@@ -7078,13 +7114,12 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
 CPAN_META_HISTORY
 
 $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_MERGE';
-  package CPAN::Meta::Merge;
-  
   use strict;
   use warnings;
   
-  our $VERSION = '2.142060'; # VERSION
-  
+  package CPAN::Meta::Merge;
+  # VERSION
+  $CPAN::Meta::Merge::VERSION = '2.142690';
   use Carp qw/croak/;
   use Scalar::Util qw/blessed/;
   use CPAN::Meta::Converter;
@@ -7249,7 +7284,7 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
     my $current = {};
     for my $next (@items) {
       if ( blessed($next) && $next->isa('CPAN::Meta') ) {
-        $next = $next->as_string_hash;
+        $next = $next->as_struct;
       }
       elsif ( ref($next) eq 'HASH' ) {
         my $cmc = CPAN::Meta::Converter->new(
@@ -7281,7 +7316,7 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 SYNOPSIS
   
@@ -7333,8 +7368,8 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use strict;
   use warnings;
   package CPAN::Meta::Prereqs;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::Prereqs::VERSION = '2.142690';
   #pod =head1 DESCRIPTION
   #pod
   #pod A CPAN::Meta::Prereqs object represents the prerequisites for a CPAN
@@ -7617,7 +7652,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 DESCRIPTION
   
@@ -8797,8 +8832,8 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   use strict;
   use warnings;
   package CPAN::Meta::Spec;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::Spec::VERSION = '2.142690';
   1;
   
   # ABSTRACT: specification for CPAN distribution metadata
@@ -8818,7 +8853,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 SYNOPSIS
   
@@ -9316,7 +9351,10 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   This Map describes any files, directories, packages, and namespaces that
   are private to the packaging or implementation of the distribution and
-  should be ignored by indexing or search tools.
+  should be ignored by indexing or search tools. Note that this is a list of
+  exclusions, and the spec does not define what to I<include> - see
+  L</Indexing distributions a la PAUSE> in the implementors notes for more
+  information.
   
   Valid subkeys are as follows:
   
@@ -9928,6 +9966,24 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   presenting it to the user as canonical or relying on it as such is
   invariably the height of folly.
   
+  =head2 Indexing distributions a la PAUSE
+  
+  While no_index tells you what must be ignored when indexing, this spec holds
+  no opinion on how you should get your initial candidate list of things to
+  possibly index. For "normal" distributions you might consider simply indexing
+  the contents of lib/, but there are many fascinating oddities on CPAN and
+  many dists from the days when it was normal to put the main .pm file in the
+  root of the distribution archive - so PAUSE currently indexes all .pm and .PL
+  files that are not either (a) specifically excluded by no_index (b) in
+  C<inc>, C<xt>, or C<t> directories, or common 'mistake' directories such as
+  C<perl5>.
+  
+  Or: If you're trying to be PAUSE-like, make sure you skip C<inc>, C<xt> and
+  C<t> as well as anything marked as no_index.
+  
+  Also remember: If the META file contains a provides field, you shouldn't be
+  indexing anything in the first place - just use that.
+  
   =head1 SEE ALSO
   
   =over 4
@@ -10008,8 +10064,8 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   use strict;
   use warnings;
   package CPAN::Meta::Validator;
-  our $VERSION = '2.142060'; # VERSION
-  
+  # VERSION
+  $CPAN::Meta::Validator::VERSION = '2.142690';
   #pod =head1 SYNOPSIS
   #pod
   #pod   my $struct = decode_json_file('META.json');
@@ -11003,7 +11059,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =head1 VERSION
   
-  version 2.142060
+  version 2.142690
   
   =head1 SYNOPSIS
   
@@ -13348,7 +13404,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   use strict;
   use warnings;
   # ABSTRACT: A small, simple, correct HTTP/1.1 client
-  our $VERSION = '0.049'; # VERSION
+  our $VERSION = '0.050'; # VERSION
   
   use Carp ();
   
@@ -13828,6 +13884,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
           method    => $method,
           scheme    => $scheme,
           host      => $host,
+          port      => $port,
           host_port => ($port == $DefaultPort{$scheme} ? $host : "$host:$port"),
           uri       => $path_query,
           headers   => {},
@@ -13964,9 +14021,9 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
       my $connect_request = {
           method    => 'CONNECT',
-          uri       => $request->{host_port},
+          uri       => "$request->{host}:$request->{port}",
           headers   => {
-              host => $request->{host_port},
+              host => "$request->{host}:$request->{port}",
               'user-agent' => $agent,
           }
       };
@@ -14802,7 +14859,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =head1 VERSION
   
-  version 0.049
+  version 0.050
   
   =head1 SYNOPSIS
   
@@ -15367,13 +15424,17 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =head1 CONTRIBUTORS
   
-  =for stopwords Alan Gardner James Raspass Jess Robinson Lukas Eklund Martin J. Evans Martin-Louis Bright Mike Doherty Petr Písař Serguei Trouchelle Syohei YOSHIDA Sören Kornetzki Alessandro Ghedini Tom Hukins Tony Cook Brad Gilbert Chris Nehren Weyl Claes Jakobsson Clinton Gormley Craig Berry David Mitchell Edward Zborowski
+  =for stopwords Alan Gardner Edward Zborowski James Raspass Jess Robinson Lukas Eklund Martin J. Evans Martin-Louis Bright Mike Doherty Petr Písař Serguei Trouchelle Syohei YOSHIDA Alessandro Ghedini Sören Kornetzki Tom Hukins Tony Cook Brad Gilbert Chris Nehren Weyl Claes Jakobsson Clinton Gormley Craig Berry David Mitchell Dean Pearce
   
   =over 4
   
   =item *
   
   Alan Gardner <gardner@pythian.com>
+  
+  =item *
+  
+  Edward Zborowski <ed@rubensteintech.com>
   
   =item *
   
@@ -15413,11 +15474,11 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =item *
   
-  Sören Kornetzki <soeren.kornetzki@delti.com>
+  Alessandro Ghedini <al3xbio@gmail.com>
   
   =item *
   
-  Alessandro Ghedini <al3xbio@gmail.com>
+  Sören Kornetzki <soeren.kornetzki@delti.com>
   
   =item *
   
@@ -15457,7 +15518,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =item *
   
-  Edward Zborowski <ed@rubensteintech.com>
+  Dean Pearce <pearce@pythian.com>
   
   =back
   
