@@ -21,7 +21,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7012";
+  our $VERSION = "1.7013";
   
   =encoding utf8
   
@@ -15546,7 +15546,7 @@ $fatpacked{"JSON/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP
   use B ();
   #use Devel::Peek;
   
-  $JSON::PP::VERSION = '2.27203';
+  $JSON::PP::VERSION = '2.27300';
   
   @JSON::PP::EXPORT = qw(encode_json decode_json from_json to_json);
   
@@ -16190,6 +16190,7 @@ $fatpacked{"JSON/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP
           }
           else {
               utf8::upgrade( $text );
+              utf8::encode( $text );
           }
   
           $len = length $text;
@@ -16341,17 +16342,12 @@ $fatpacked{"JSON/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP
                   else{
   
                       if ( ord $ch  > 127 ) {
-                          if ( $utf8 ) {
-                              unless( $ch = is_valid_utf8($ch) ) {
-                                  $at -= 1;
-                                  decode_error("malformed UTF-8 character in JSON string");
-                              }
-                              else {
-                                  $at += $utf8_len - 1;
-                              }
+                          unless( $ch = is_valid_utf8($ch) ) {
+                              $at -= 1;
+                              decode_error("malformed UTF-8 character in JSON string");
                           }
                           else {
-                              utf8::encode( $ch );
+                              $at += $utf8_len - 1;
                           }
   
                           $is_utf8 = 1;
@@ -17165,7 +17161,7 @@ $fatpacked{"JSON/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP
   
   =head1 VERSION
   
-      2.27202
+      2.27300
   
   L<JSON::XS> 2.27 (~2.30) compatible.
   
@@ -18326,7 +18322,7 @@ $fatpacked{"JSON/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'JSON_PP
   
   =head1 COPYRIGHT AND LICENSE
   
-  Copyright 2007-2013 by Makamaka Hannyaharamitu
+  Copyright 2007-2014 by Makamaka Hannyaharamitu
   
   This library is free software; you can redistribute it and/or modify
   it under the same terms as Perl itself. 
@@ -19036,102 +19032,6 @@ $fatpacked{"Module/CPANfile/Requirement.pm"} = '#line '.(1+__LINE__).' "'.__FILE
   
   1;
 MODULE_CPANFILE_REQUIREMENT
-
-$fatpacked{"Module/CPANfile/Result.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_CPANFILE_RESULT';
-  package Module::CPANfile::Result;
-  use strict;
-  
-  sub from_prereqs {
-      my($class, $spec) = @_;
-      bless {
-          phase => 'runtime',
-          spec => $spec,
-      }, $class;
-  }
-  
-  sub new {
-      bless {
-          phase => 'runtime', # default phase
-          features => {},
-          feature => undef,
-          spec  => {},
-      }, shift;
-  }
-  
-  sub on {
-      my($self, $phase, $code) = @_;
-      local $self->{phase} = $phase;
-      $code->()
-  }
-  
-  sub feature {
-      my($self, $identifier, $description, $code) = @_;
-  
-      # shortcut: feature identifier => sub { ... }
-      if (@_ == 3 && ref($description) eq 'CODE') {
-          $code = $description;
-          $description = $identifier;
-      }
-  
-      unless (ref $description eq '' && ref $code eq 'CODE') {
-          Carp::croak("Usage: feature 'identifier', 'Description' => sub { ... }");
-      }
-  
-      local $self->{feature} = $self->{features}{$identifier}
-        = { identifier => $identifier, description => $description, spec => {} };
-      $code->();
-  }
-  
-  sub osname { die "TODO" }
-  
-  sub requires {
-      my($self, $module, $requirement) = @_;
-      ($self->{feature} ? $self->{feature}{spec} : $self->{spec})
-        ->{$self->{phase}}{requires}{$module} = $requirement || 0;
-  }
-  
-  sub recommends {
-      my($self, $module, $requirement) = @_;
-      ($self->{feature} ? $self->{feature}{spec} : $self->{spec})
-        ->{$self->{phase}}{recommends}{$module} = $requirement || 0;
-  }
-  
-  sub suggests {
-      my($self, $module, $requirement) = @_;
-      ($self->{feature} ? $self->{feature}{spec} : $self->{spec})
-        ->{$self->{phase}}{suggests}{$module} = $requirement || 0;
-  }
-  
-  sub conflicts {
-      my($self, $module, $requirement) = @_;
-      ($self->{feature} ? $self->{feature}{spec} : $self->{spec})
-        ->{$self->{phase}}{conflicts}{$module} = $requirement || 0;
-  }
-  
-  # Module::Install compatible shortcuts
-  
-  sub configure_requires {
-      my($self, @args) = @_;
-      $self->on(configure => sub { $self->requires(@args) });
-  }
-  
-  sub build_requires {
-      my($self, @args) = @_;
-      $self->on(build => sub { $self->requires(@args) });
-  }
-  
-  sub test_requires {
-      my($self, @args) = @_;
-      $self->on(test => sub { $self->requires(@args) });
-  }
-  
-  sub author_requires {
-      my($self, @args) = @_;
-      $self->on(develop => sub { $self->requires(@args) });
-  }
-  
-  1;
-MODULE_CPANFILE_RESULT
 
 $fatpacked{"Module/Metadata.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_METADATA';
   # -*- mode: cperl; tab-width: 8; indent-tabs-mode: nil; basic-offset: 2 -*-
