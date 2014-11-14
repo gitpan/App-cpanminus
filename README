@@ -30,8 +30,8 @@ INSTALLATION
         curl -L http://cpanmin.us | perl - --sudo App::cpanminus
 
     This will install "cpanm" to your bin directory like "/usr/local/bin"
-    (unless you configured "INSTALL_BASE" with local::lib), so you probably
-    need the "--sudo" option.
+    and you'll need the "--sudo" option to write to the directory, unless
+    you configured "INSTALL_BASE" with local::lib.
 
   Installing to local perl (perlbrew)
     If you have perl in your home directory, which is the case if you use

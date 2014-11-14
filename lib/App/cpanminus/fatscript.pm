@@ -21,7 +21,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7014";
+  our $VERSION = "1.7015";
   
   =encoding utf8
   
@@ -63,8 +63,8 @@ $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'A
       curl -L http://cpanmin.us | perl - --sudo App::cpanminus
   
   This will install C<cpanm> to your bin directory like
-  C</usr/local/bin> (unless you configured C<INSTALL_BASE> with
-  L<local::lib>), so you probably need the C<--sudo> option.
+  C</usr/local/bin> and you'll need the C<--sudo> option to write to
+  the directory, unless you configured C<INSTALL_BASE> with L<local::lib>.
   
   =head2 Installing to local perl (perlbrew)
   
@@ -7788,8 +7788,9 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   use strict;
   use warnings;
   package CPAN::Meta::Requirements;
-  our $VERSION = '2.128'; # VERSION
   # ABSTRACT: a set of version requirements for a CPAN dist
+  
+  our $VERSION = '2.129';
   
   #pod =head1 SYNOPSIS
   #pod
@@ -8222,10 +8223,12 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   #pod =method add_string_requirement
   #pod
   #pod   $req->add_string_requirement('Library::Foo' => '>= 1.208, <= 2.206');
+  #pod   $req->add_string_requirement('Library::Foo' => v1.208);
   #pod
   #pod This method parses the passed in string and adds the appropriate requirement
-  #pod for the given module.  It understands version ranges as described in the
-  #pod L<CPAN::Meta::Spec/Version Ranges>. For example:
+  #pod for the given module.  A version can be a Perl "v-string".  It understands
+  #pod version ranges as described in the L<CPAN::Meta::Spec/Version Ranges>. For
+  #pod example:
   #pod
   #pod =over 4
   #pod
@@ -8267,8 +8270,13 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
     Carp::confess("No requirement string provided for $module")
       unless defined $req && length $req;
   
-    my @parts = split qr{\s*,\s*}, $req;
+    my $magic = _find_magic_vstring( $req );
+    if (length $magic) {
+      $self->add_minimum($module => $magic);
+      return;
+    }
   
+    my @parts = split qr{\s*,\s*}, $req;
   
     for my $part (@parts) {
       my ($op, $ver) = $part =~ m{\A\s*(==|>=|>|<=|<|!=)\s*(.*)\z};
@@ -8290,7 +8298,8 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   #pod
   #pod This is an alternate constructor for a CPAN::Meta::Requirements object.  It takes
   #pod a hash of module names and version requirement strings and returns a new
-  #pod CPAN::Meta::Requirements object.
+  #pod CPAN::Meta::Requirements object. As with add_string_requirement, a
+  #pod version can be a Perl "v-string".
   #pod
   #pod =cut
   
@@ -8522,7 +8531,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
   =head1 VERSION
   
-  version 2.128
+  version 2.129
   
   =head1 SYNOPSIS
   
@@ -8727,10 +8736,12 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   =head2 add_string_requirement
   
     $req->add_string_requirement('Library::Foo' => '>= 1.208, <= 2.206');
+    $req->add_string_requirement('Library::Foo' => v1.208);
   
   This method parses the passed in string and adds the appropriate requirement
-  for the given module.  It understands version ranges as described in the
-  L<CPAN::Meta::Spec/Version Ranges>. For example:
+  for the given module.  A version can be a Perl "v-string".  It understands
+  version ranges as described in the L<CPAN::Meta::Spec/Version Ranges>. For
+  example:
   
   =over 4
   
@@ -8761,7 +8772,8 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
   This is an alternate constructor for a CPAN::Meta::Requirements object.  It takes
   a hash of module names and version requirement strings and returns a new
-  CPAN::Meta::Requirements object.
+  CPAN::Meta::Requirements object. As with add_string_requirement, a
+  version can be a Perl "v-string".
   
   =for :stopwords cpan testmatrix url annocpan anno bugtracker rt cpants kwalitee diff irc mailto metadata placeholders metacpan
   
@@ -8798,9 +8810,13 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
   =head1 CONTRIBUTORS
   
-  =for stopwords Karen Etheridge robario
+  =for stopwords Ed J Karen Etheridge robario
   
   =over 4
+  
+  =item *
+  
+  Ed J <mohawk2@users.noreply.github.com>
   
   =item *
   
@@ -20430,7 +20446,7 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
   use version ();
   use File::Spec ();
   
-  our $VERSION = '0.28';
+  our $VERSION = '0.29';
   our $VERBOSE = 0;
   our $ALLOW_DEV_VERSION = 0;
   our $FORK = 0;
@@ -20619,7 +20635,7 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
           } else {
               # XXX Limit Resources too
   
-              my($comp) = Safe->new("_pause::mldistwatch");
+              my($comp) = Safe->new;
               my $eval = qq{
                   local(\$^W) = 0;
                   Parse::PMFile::_parse_version_safely("$pmcp");
