@@ -4,7 +4,7 @@ package App::cpanminus::fatscript;
 # install itself for you. You might want to run it as a root with sudo
 # if you want to install to places like /usr/local/bin.
 #
-#   % curl -L http://cpanmin.us | perl - App::cpanminus
+#   % curl -L https://cpanmin.us | perl - App::cpanminus
 #
 # If you don't have curl but wget, replace `curl -L` with `wget -O -`.
 #
@@ -21,7 +21,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7015";
+  our $VERSION = "1.7016";
   
   =encoding utf8
   
@@ -60,7 +60,7 @@ $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'A
   
   You can also use the latest cpanminus to install cpanminus itself:
   
-      curl -L http://cpanmin.us | perl - --sudo App::cpanminus
+      curl -L https://cpanmin.us | perl - --sudo App::cpanminus
   
   This will install C<cpanm> to your bin directory like
   C</usr/local/bin> and you'll need the C<--sudo> option to write to
@@ -73,7 +73,7 @@ $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'A
   you're most likely to have a write permission to the perl's library
   path. You can just do:
   
-      curl -L http://cpanmin.us | perl - App::cpanminus
+      curl -L https://cpanmin.us | perl - App::cpanminus
   
   to install the C<cpanm> executable to the perl's bin path, like
   C<~/perl5/perlbrew/bin/cpanm>.
@@ -670,7 +670,11 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
           'self-contained!' => \$self->{self_contained},
           'mirror=s@' => $self->{mirrors},
           'mirror-only!' => \$self->{mirror_only},
-          'mirror-index=s'  => \$self->{mirror_index},
+          'mirror-index=s' => \$self->{mirror_index},
+          'M|from=s' => sub {
+              $self->{mirrors}     = [$_[1]];
+              $self->{mirror_only} = 1;
+          },
           'cpanmetadb=s'    => \$self->{cpanmetadb},
           'cascade-search!' => \$self->{cascade_search},
           'prompt!'   => \$self->{prompt},
@@ -1321,6 +1325,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
     --reinstall               Reinstall the distribution even if you already have the latest version installed
     --mirror                  Specify the base URL for the mirror (e.g. http://cpan.cpantesters.org/)
     --mirror-only             Use the mirror's index file instead of the CPAN Meta DB
+    -M,--from                 Use only this mirror base URL and its index file
     --prompt                  Prompt when configure/build/test fails
     -l,--local-lib            Specify the install base to install modules
     -L,--local-lib-contained  Specify the install base to install all non-core modules
@@ -1345,6 +1350,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
     cpanm --installdeps .                                     # install all the deps for the current directory
     cpanm -L extlib Plack                                     # install Plack and all non-core deps into extlib
     cpanm --mirror http://cpan.cpantesters.org/ DBI           # use the fast-syncing mirror
+    cpanm -M https://cpan.metacpan.org App::perlbrew          # use only this secure mirror and its index
   
   You can also specify the default options in PERL_CPANM_OPT environment variable in the shell rc:
   

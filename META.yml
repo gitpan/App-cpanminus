@@ -32,7 +32,7 @@ resources:
   bugtracker: https://github.com/miyagawa/cpanminus/issues
   homepage: https://github.com/miyagawa/cpanminus
   repository: https://github.com/miyagawa/cpanminus.git
-version: '1.7015'
+version: '1.7016'
 x_contributors:
   - 'Alessandro Ghedini <al3xbio@gmail.com>'
   - 'Andrew Rodland <andrew@cleverdomain.org>'
@@ -74,6 +74,7 @@ x_contributors:
   - 'Rob Hoelz <rob@hoelz.ro>'
   - 'Robert Buels <rmb32@cornell.edu>'
   - 'Roman Jurkov <rjurkov@verio.net>'
+  - 'Sebastian Riedel <sri@cpan.org>'
   - 'Slaven Rezic <slaven@rezic.de>'
   - 'Smylers <Smylers@stripey.com>'
   - 'Stoned Elipot <stoned.elipot@gmail.com>'
