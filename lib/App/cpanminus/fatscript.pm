@@ -21,7 +21,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7016";
+  our $VERSION = "1.7017";
   
   =encoding utf8
   
@@ -3763,7 +3763,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   use warnings;
   package CPAN::Meta;
   # VERSION
-  $CPAN::Meta::VERSION = '2.142690';
+  $CPAN::Meta::VERSION = '2.143240';
   #pod =head1 SYNOPSIS
   #pod
   #pod     use v5.10;
@@ -4225,7 +4225,8 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   #pod
   #pod This method returns true if the given file should be indexed.  It decides this
   #pod by checking the C<file> and C<directory> keys in the C<no_index> property of
-  #pod the distmeta structure.
+  #pod the distmeta structure. Note that neither the version format nor
+  #pod C<release_status> are considered.
   #pod
   #pod C<$filename> should be given in unix format.
   #pod
@@ -4252,7 +4253,8 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   #pod
   #pod This method returns true if the given package should be indexed.  It decides
   #pod this by checking the C<package> and C<namespace> keys in the C<no_index>
-  #pod property of the distmeta structure.
+  #pod property of the distmeta structure. Note that neither the version format nor
+  #pod C<release_status> are considered.
   #pod
   #pod =cut
   
@@ -4401,7 +4403,7 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 SYNOPSIS
   
@@ -4559,7 +4561,8 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   This method returns true if the given file should be indexed.  It decides this
   by checking the C<file> and C<directory> keys in the C<no_index> property of
-  the distmeta structure.
+  the distmeta structure. Note that neither the version format nor
+  C<release_status> are considered.
   
   C<$filename> should be given in unix format.
   
@@ -4569,7 +4572,8 @@ $fatpacked{"CPAN/Meta.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_
   
   This method returns true if the given package should be indexed.  It decides
   this by checking the C<package> and C<namespace> keys in the C<no_index>
-  property of the distmeta structure.
+  property of the distmeta structure. Note that neither the version format nor
+  C<release_status> are considered.
   
   =head2 features
   
@@ -5024,7 +5028,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   use warnings;
   package CPAN::Meta::Converter;
   # VERSION
-  $CPAN::Meta::Converter::VERSION = '2.142690';
+  $CPAN::Meta::Converter::VERSION = '2.143240';
   #pod =head1 SYNOPSIS
   #pod
   #pod   my $struct = decode_json_file('META.json');
@@ -6515,7 +6519,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 SYNOPSIS
   
@@ -6659,7 +6663,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use warnings;
   package CPAN::Meta::Feature;
   # VERSION
-  $CPAN::Meta::Feature::VERSION = '2.142690';
+  $CPAN::Meta::Feature::VERSION = '2.143240';
   use CPAN::Meta::Prereqs;
   
   #pod =head1 DESCRIPTION
@@ -6734,7 +6738,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 DESCRIPTION
   
@@ -6808,7 +6812,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use warnings;
   package CPAN::Meta::History;
   # VERSION
-  $CPAN::Meta::History::VERSION = '2.142690';
+  $CPAN::Meta::History::VERSION = '2.143240';
   1;
   
   # ABSTRACT: history of CPAN Meta Spec changes
@@ -6825,7 +6829,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 DESCRIPTION
   
@@ -7125,14 +7129,14 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   package CPAN::Meta::Merge;
   # VERSION
-  $CPAN::Meta::Merge::VERSION = '2.142690';
+  $CPAN::Meta::Merge::VERSION = '2.143240';
   use Carp qw/croak/;
   use Scalar::Util qw/blessed/;
   use CPAN::Meta::Converter;
   
   sub _identical {
     my ($left, $right, $path) = @_;
-    croak "Can't merge attribute " . join '.', @{$path} unless $left eq $right;
+    croak sprintf "Can't merge attribute %s: '%s' does not equal '%s'", join('.', @{$path}), $left, $right unless $left eq $right;
     return $left;
   }
   
@@ -7195,6 +7199,36 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
     croak sprintf "Can't merge '%s'", join '.', @{$path};
   }
   
+  sub _optional_features {
+    my ($left, $right, $path) = @_;
+  
+    for my $key (keys %{$right}) {
+      if (not exists $left->{$key}) {
+        $left->{$key} = $right->{$key};
+      }
+      else {
+        for my $subkey (keys %{ $right->{$key} }) {
+          next if $subkey eq 'prereqs';
+          if (not exists $left->{$key}{$subkey}) {
+            $left->{$key}{$subkey} = $right->{$key}{$subkey};
+          }
+          else {
+            Carp::croak "Cannot merge two optional_features named '$key' with different '$subkey' values"
+              if do { no warnings 'uninitialized'; $left->{$key}{$subkey} ne $right->{$key}{$subkey} };
+          }
+        }
+  
+        require CPAN::Meta::Prereqs;
+        $left->{$key}{prereqs} =
+          CPAN::Meta::Prereqs->new($left->{$key}{prereqs})
+            ->with_merged_prereqs(CPAN::Meta::Prereqs->new($right->{$key}{prereqs}))
+            ->as_string_hash;
+      }
+    }
+    return $left;
+  }
+  
+  
   my %default = (
     abstract       => \&_identical,
     author         => \&_set_addition,
@@ -7217,7 +7251,7 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
     description       => \&_identical,
     keywords          => \&_set_addition,
     no_index          => { map { ($_ => \&_set_addition) } qw/file directory package namespace/ },
-    optional_features => \&_uniq_map,
+    optional_features => \&_optional_features,
     prereqs           => sub {
       require CPAN::Meta::Prereqs;
       my ($left, $right) = map { CPAN::Meta::Prereqs->new($_) } @_[0,1];
@@ -7272,7 +7306,7 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
         my $mapping = _coerce_mapping($value, [ @{$map_path}, $key ]);
         $ret{$key} = sub {
           my ($left, $right, $path) = @_;
-          return _merge($left, $right, $mapping, [ @{$path}, $key ]);
+          return _merge($left, $right, $mapping, [ @{$path} ]);
         };
       }
       elsif ($coderef_for{$value}) {
@@ -7322,7 +7356,7 @@ $fatpacked{"CPAN/Meta/Merge.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 SYNOPSIS
   
@@ -7375,7 +7409,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use warnings;
   package CPAN::Meta::Prereqs;
   # VERSION
-  $CPAN::Meta::Prereqs::VERSION = '2.142690';
+  $CPAN::Meta::Prereqs::VERSION = '2.143240';
   #pod =head1 DESCRIPTION
   #pod
   #pod A CPAN::Meta::Prereqs object represents the prerequisites for a CPAN
@@ -7658,7 +7692,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 DESCRIPTION
   
@@ -7796,7 +7830,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   package CPAN::Meta::Requirements;
   # ABSTRACT: a set of version requirements for a CPAN dist
   
-  our $VERSION = '2.129';
+  our $VERSION = '2.130';
   
   #pod =head1 SYNOPSIS
   #pod
@@ -7853,8 +7887,9 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   #pod
   #pod =for :list
   #pod * C<bad_version_hook> -- if provided, when a version cannot be parsed into
-  #pod   a version object, this code reference will be called with the invalid version
-  #pod   string as an argument.  It must return a valid version object.
+  #pod   a version object, this code reference will be called with the invalid
+  #pod   version string as first argument, and the module name as second
+  #pod   argument.  It must return a valid version object.
   #pod
   #pod All other keys are ignored.
   #pod
@@ -7893,7 +7928,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   }
   
   sub _version_object {
-    my ($self, $version) = @_;
+    my ($self, $module, $version) = @_;
   
     my $vobj;
   
@@ -7912,7 +7947,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
     if ( my $err = $@ ) {
       my $hook = $self->{bad_version_hook};
-      $vobj = eval { $hook->($version) }
+      $vobj = eval { $hook->($version, $module) }
         if ref $hook eq 'CODE';
       unless (Scalar::Util::blessed($vobj) && $vobj->isa("version")) {
         $err =~ s{ at .* line \d+.*$}{};
@@ -7993,7 +8028,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
       my $code = sub {
         my ($self, $name, $version) = @_;
   
-        $version = $self->_version_object( $version );
+        $version = $self->_version_object( $name, $version );
   
         $self->__modify_entry_for($name, $method, $version);
   
@@ -8051,7 +8086,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   sub accepts_module {
     my ($self, $module, $version) = @_;
   
-    $version = $self->_version_object( $version );
+    $version = $self->_version_object( $module, $version );
   
     return 1 unless my $range = $self->__entry_for($module);
     return $range->_accepts($version);
@@ -8273,8 +8308,10 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   sub add_string_requirement {
     my ($self, $module, $req) = @_;
   
-    Carp::confess("No requirement string provided for $module")
-      unless defined $req && length $req;
+    unless ( defined $req && length $req ) {
+      $req = 0;
+      $self->_blank_carp($module);
+    }
   
     my $magic = _find_magic_vstring( $req );
     if (length $magic) {
@@ -8301,24 +8338,32 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   #pod =method from_string_hash
   #pod
   #pod   my $req = CPAN::Meta::Requirements->from_string_hash( \%hash );
+  #pod   my $req = CPAN::Meta::Requirements->from_string_hash( \%hash, \%opts );
   #pod
-  #pod This is an alternate constructor for a CPAN::Meta::Requirements object.  It takes
-  #pod a hash of module names and version requirement strings and returns a new
-  #pod CPAN::Meta::Requirements object. As with add_string_requirement, a
-  #pod version can be a Perl "v-string".
+  #pod This is an alternate constructor for a CPAN::Meta::Requirements
+  #pod object. It takes a hash of module names and version requirement
+  #pod strings and returns a new CPAN::Meta::Requirements object. As with
+  #pod add_string_requirement, a version can be a Perl "v-string". Optionally,
+  #pod you can supply a hash-reference of options, exactly as with the L</new>
+  #pod method.
   #pod
   #pod =cut
   
-  sub from_string_hash {
-    my ($class, $hash) = @_;
+  sub _blank_carp {
+    my ($self, $module) = @_;
+    Carp::carp("Undefined requirement for $module treated as '0'");
+  }
   
-    my $self = $class->new;
+  sub from_string_hash {
+    my ($class, $hash, $options) = @_;
+  
+    my $self = $class->new($options);
   
     for my $module (keys %$hash) {
       my $req = $hash->{$module};
       unless ( defined $req && length $req ) {
         $req = 0;
-        Carp::carp("Undefined requirement for $module treated as '0'");
+        $class->_blank_carp($module);
       }
       $self->add_string_requirement($module, $req);
     }
@@ -8537,7 +8582,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
   =head1 VERSION
   
-  version 2.129
+  version 2.130
   
   =head1 SYNOPSIS
   
@@ -8577,7 +8622,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
   =item *
   
-  C<bad_version_hook> -- if provided, when a version cannot be parsed into a version object, this code reference will be called with the invalid version string as an argument.  It must return a valid version object.
+  C<bad_version_hook> -- if provided, when a version cannot be parsed into a version object, this code reference will be called with the invalid version string as first argument, and the module name as second argument.  It must return a valid version object.
   
   =back
   
@@ -8775,11 +8820,14 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   =head2 from_string_hash
   
     my $req = CPAN::Meta::Requirements->from_string_hash( \%hash );
+    my $req = CPAN::Meta::Requirements->from_string_hash( \%hash, \%opts );
   
-  This is an alternate constructor for a CPAN::Meta::Requirements object.  It takes
-  a hash of module names and version requirement strings and returns a new
-  CPAN::Meta::Requirements object. As with add_string_requirement, a
-  version can be a Perl "v-string".
+  This is an alternate constructor for a CPAN::Meta::Requirements
+  object. It takes a hash of module names and version requirement
+  strings and returns a new CPAN::Meta::Requirements object. As with
+  add_string_requirement, a version can be a Perl "v-string". Optionally,
+  you can supply a hash-reference of options, exactly as with the L</new>
+  method.
   
   =for :stopwords cpan testmatrix url annocpan anno bugtracker rt cpants kwalitee diff irc mailto metadata placeholders metacpan
   
@@ -8855,7 +8903,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   use warnings;
   package CPAN::Meta::Spec;
   # VERSION
-  $CPAN::Meta::Spec::VERSION = '2.142690';
+  $CPAN::Meta::Spec::VERSION = '2.143240';
   1;
   
   # ABSTRACT: specification for CPAN distribution metadata
@@ -8875,7 +8923,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 SYNOPSIS
   
@@ -10087,7 +10135,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   use warnings;
   package CPAN::Meta::Validator;
   # VERSION
-  $CPAN::Meta::Validator::VERSION = '2.142690';
+  $CPAN::Meta::Validator::VERSION = '2.143240';
   #pod =head1 SYNOPSIS
   #pod
   #pod   my $struct = decode_json_file('META.json');
@@ -11081,7 +11129,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n
   
   =head1 VERSION
   
-  version 2.142690
+  version 2.143240
   
   =head1 SYNOPSIS
   
@@ -13426,7 +13474,8 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   use strict;
   use warnings;
   # ABSTRACT: A small, simple, correct HTTP/1.1 client
-  our $VERSION = '0.050'; # VERSION
+  
+  our $VERSION = '0.051';
   
   use Carp ();
   
@@ -13894,7 +13943,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   sub _agent {
       my $class = ref($_[0]) || $_[0];
       (my $default_agent = $class) =~ s{::}{-}g;
-      return $default_agent . "/" . ($class->VERSION || 0);
+      return $default_agent . "/" . $class->VERSION;
   }
   
   sub _request {
@@ -14284,15 +14333,6 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   use Errno      qw[EINTR EPIPE];
   use IO::Socket qw[SOCK_STREAM];
-  
-  # for thread safety, we need to know thread id or else fake it;
-  # requires "threads.pm" to hide it from the minimum version detector
-  if ( eval { require "threads.pm"; 1 } ) { ## no critic
-      *_get_tid = sub { threads->tid };
-  }
-  else {
-      *_get_tid = sub () { 0 };
-  }
   
   # PERL_HTTP_TINY_IPV4_ONLY is a private environment variable to force old
   # behavior if someone is unable to boostrap CPAN from a new perl install; it is
@@ -14837,6 +14877,12 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
         . qq/Try installing Mozilla::CA from CPAN\n/;
   }
   
+  # for thread safety, we need to know thread id if threads are loaded
+  sub _get_tid {
+      no warnings 'reserved'; # for 'threads'
+      return threads->can("tid") ? threads->tid : 0;
+  }
+  
   sub _ssl_args {
       my ($self, $host) = @_;
   
@@ -14881,7 +14927,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =head1 VERSION
   
-  version 0.050
+  version 0.051
   
   =head1 SYNOPSIS
   
@@ -15446,13 +15492,49 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =head1 CONTRIBUTORS
   
-  =for stopwords Alan Gardner Edward Zborowski James Raspass Jess Robinson Lukas Eklund Martin J. Evans Martin-Louis Bright Mike Doherty Petr Písař Serguei Trouchelle Syohei YOSHIDA Alessandro Ghedini Sören Kornetzki Tom Hukins Tony Cook Brad Gilbert Chris Nehren Weyl Claes Jakobsson Clinton Gormley Craig Berry David Mitchell Dean Pearce
+  =for stopwords Alan Gardner Alessandro Ghedini Brad Gilbert Chris Nehren Weyl Claes Jakobsson Clinton Gormley Craig Berry David Mitchell Dean Pearce Edward Zborowski James Raspass Jess Robinson Lukas Eklund Martin J. Evans Martin-Louis Bright Mike Doherty Petr Písař Serguei Trouchelle Sören Kornetzki Syohei YOSHIDA Tom Hukins Tony Cook
   
   =over 4
   
   =item *
   
   Alan Gardner <gardner@pythian.com>
+  
+  =item *
+  
+  Alessandro Ghedini <al3xbio@gmail.com>
+  
+  =item *
+  
+  Brad Gilbert <bgills@cpan.org>
+  
+  =item *
+  
+  Chris Nehren <apeiron@cpan.org>
+  
+  =item *
+  
+  Chris Weyl <cweyl@alumni.drew.edu>
+  
+  =item *
+  
+  Claes Jakobsson <claes@surfar.nu>
+  
+  =item *
+  
+  Clinton Gormley <clint@traveljury.com>
+  
+  =item *
+  
+  Craig Berry <cberry@cpan.org>
+  
+  =item *
+  
+  David Mitchell <davem@iabyn.com>
+  
+  =item *
+  
+  Dean Pearce <pearce@pythian.com>
   
   =item *
   
@@ -15492,15 +15574,11 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =item *
   
-  Syohei YOSHIDA <syohex@gmail.com>
-  
-  =item *
-  
-  Alessandro Ghedini <al3xbio@gmail.com>
-  
-  =item *
-  
   Sören Kornetzki <soeren.kornetzki@delti.com>
+  
+  =item *
+  
+  Syohei YOSHIDA <syohex@gmail.com>
   
   =item *
   
@@ -15509,38 +15587,6 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   =item *
   
   Tony Cook <tony@develop-help.com>
-  
-  =item *
-  
-  Brad Gilbert <bgills@cpan.org>
-  
-  =item *
-  
-  Chris Nehren <apeiron@cpan.org>
-  
-  =item *
-  
-  Chris Weyl <rsrchboy@cpan.org>
-  
-  =item *
-  
-  Claes Jakobsson <claes@surfar.nu>
-  
-  =item *
-  
-  Clinton Gormley <clint@traveljury.com>
-  
-  =item *
-  
-  Craig Berry <cberry@cpan.org>
-  
-  =item *
-  
-  David Mitchell <davem@iabyn.com>
-  
-  =item *
-  
-  Dean Pearce <pearce@pythian.com>
   
   =back
   
@@ -24531,6 +24577,7 @@ cpanm - get, unpack build and install modules from CPAN
   cpanm --installdeps .                            # install all the deps for the current directory
   cpanm -L extlib Plack                            # install Plack and all non-core deps into extlib
   cpanm --mirror http://cpan.cpantesters.org/ DBI  # use the fast-syncing mirror
+  cpanm --from https://cpan.metacpan.org/ Plack    # use only the HTTPS mirror
 
 =head1 COMMANDS
 
@@ -24714,11 +24761,27 @@ DB and MetaCPAN.
 Select this option if you are using a local mirror of CPAN, such as
 minicpan when you're offline, or your own CPAN index (a.k.a darkpan).
 
-B<Tip:> It might be useful if you name these mirror options with your
-shell aliases, like:
+=item --from, -M
 
-  alias minicpanm='cpanm --mirror ~/minicpan --mirror-only'
-  alias darkpan='cpanm --mirror http://mycompany.example.com/DPAN --mirror-only'
+  cpanm -M https://cpan.metacpan.org/
+  cpanm --from https://cpan.metacpan.org/
+
+Use the given mirror URL and its index as the I<only> source to search
+and download modules from.
+
+It works similar to C<--mirror> and C<--mirror-only> combined, with a
+small difference: unlike C<--mirror> which I<appends> the URL to the
+list of mirrors, C<--from> (or C<-M> for short) uses the specified URL
+as its I<only> source to download index and modules from. This makes
+the option always override the default mirror, which might have been
+set via global options such as the one set by C<PERL_CPANM_OPT>
+environment variable.
+
+B<Tip:> It might be useful if you name these options with your shell
+aliases, like:
+
+  alias minicpanm='cpanm --from ~/minicpan'
+  alias darkpan='cpanm --from http://mycompany.example.com/DPAN'
 
 =item --mirror-index
 
