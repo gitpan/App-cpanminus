@@ -10,7 +10,7 @@ package App::cpanminus::fatscript;
 #
 # For more details about this program, visit http://search.cpan.org/dist/App-cpanminus
 
-our $VERSION = "1.6928";
+our $VERSION = "1.7018";
 
 # DO NOT EDIT -- this is an auto generated file
 
@@ -21,7 +21,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7017";
+  our $VERSION = "1.7018";
   
   =encoding utf8
   
