@@ -24,7 +24,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7019";
+  our $VERSION = "1.7020";
   
   =encoding utf8
   
@@ -20501,7 +20501,7 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
   use version ();
   use File::Spec ();
   
-  our $VERSION = '0.30';
+  our $VERSION = '0.31';
   our $VERBOSE = 0;
   our $ALLOW_DEV_VERSION = 0;
   our $FORK = 0;
@@ -20720,7 +20720,7 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
                       if ($err->{line} =~ /([\$*])([\w\:\']*)\bVERSION\b.*?\=(.*)/) {
                           local($^W) = 0;
                           my ($sigil, $vstr) = ($1, $3);
-                          $self->_restore_overloaded_stuff(1) if $err->{line} =~ /use\s+version\b/;
+                          $self->_restore_overloaded_stuff(1) if $err->{line} =~ /use\s+version\b|version\->|qv\(/;
                           $v = ($self->{UNSAFE} || $UNSAFE) ? eval $vstr : $comp->reval($vstr);
                           $v = $$v if $sigil eq '*' && ref $v;
                       }
