@@ -24,7 +24,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7020";
+  our $VERSION = "1.7021";
   
   =encoding utf8
   
@@ -13478,7 +13478,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   use warnings;
   # ABSTRACT: A small, simple, correct HTTP/1.1 client
   
-  our $VERSION = '0.051';
+  our $VERSION = '0.052';
   
   use Carp ();
   
@@ -13615,7 +13615,9 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
       # http proxy
       if (! exists $self->{http_proxy} ) {
-          $self->{http_proxy} = $ENV{http_proxy} || $self->{proxy};
+          # under CGI, bypass HTTP_PROXY as request sets it from Proxy header
+          local $ENV{HTTP_PROXY} if $ENV{REQUEST_METHOD};
+          $self->{http_proxy} = $ENV{http_proxy} || $ENV{HTTP_PROXY} || $self->{proxy};
       }
   
       if ( defined $self->{http_proxy} ) {
@@ -14930,7 +14932,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =head1 VERSION
   
-  version 0.051
+  version 0.052
   
   =head1 SYNOPSIS
   
@@ -15316,7 +15318,7 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   
   =item *
   
-  http_proxy
+  http_proxy or HTTP_PROXY
   
   =item *
   
@@ -15327,6 +15329,11 @@ $fatpacked{"HTTP/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HTTP_
   all_proxy or ALL_PROXY
   
   =back
+  
+  If the C<REQUEST_METHOD> environment variable is set, then this might be a CGI
+  process and C<HTTP_PROXY> would be set from the C<Proxy:> header, which is a
+  security risk.  If C<REQUEST_METHOD> is set, C<HTTP_PROXY> (the upper case
+  variant only) is ignored.
   
   Tunnelling C<https> over an C<http> proxy using the CONNECT method is
   supported.  If your proxy uses C<https> itself, you can not tunnel C<https>
@@ -20501,7 +20508,7 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
   use version ();
   use File::Spec ();
   
-  our $VERSION = '0.31';
+  our $VERSION = '0.32';
   our $VERBOSE = 0;
   our $ALLOW_DEV_VERSION = 0;
   our $FORK = 0;
@@ -20709,6 +20716,7 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
               $comp->deny(qw/enteriter iter unstack goto/); # minimum protection against Acme::BadExample
   
               version->import('qv') if $self->{UNSAFE} || $UNSAFE;
+              $self->_store_overloaded_stuff;
               {
                   no strict;
                   $v = ($self->{UNSAFE} || $UNSAFE) ? eval $eval : $comp->reval($eval);
@@ -20758,6 +20766,19 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
       return $self->_normalize_version($v);
   }
   
+  sub _store_overloaded_stuff {
+      my $self = shift;
+      my %overloaded;
+      no strict 'refs';
+      for my $package (qw/version version::vpp charstar/) {
+          for my $op (qw/"" 0+ cmp <=> bool ++ -- + - * =/) {
+              my $key = "$package\::($op";
+              $overloaded{$key} = *{$key} if defined *{$key};
+          }
+      }
+      $self->{overloaded} = \%overloaded;
+  }
+  
   sub _restore_overloaded_stuff {
       my ($self, $used_version_in_safe) = @_;
       return if $self->{UNSAFE} || $UNSAFE;
@@ -20765,60 +20786,18 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
       no strict 'refs';
       no warnings 'redefine';
   
-      # version XS in CPAN
-      my $restored;
-      if ($INC{'version/vxs.pm'}) {
-          *{'version::(""'} = \&version::vxs::stringify;
-          *{'version::(0+'} = \&version::vxs::numify;
-          *{'version::(cmp'} = \&version::vxs::VCMP;
-          *{'version::(<=>'} = \&version::vxs::VCMP;
-          *{'version::(bool'} = \&version::vxs::boolean;
-          $restored = 1;
+      for my $key (%{ $self->{overloaded} || {} }) {
+          *{$key} = $self->{overloaded}{$key} if $self->{overloaded}{$key};
       }
-      # version PP in CPAN
-      if ($INC{'version/vpp.pm'}) {
-          {
-              package # hide from PAUSE
-                  charstar;
-              overload->import;
-          }
-          if (!$used_version_in_safe) {
-              package # hide from PAUSE
-                  version::vpp;
-              overload->import;
-          }
-          unless ($restored) {
-              *{'version::(""'} = \&version::vpp::stringify;
-              *{'version::(0+'} = \&version::vpp::numify;
-              *{'version::(cmp'} = \&version::vpp::vcmp;
-              *{'version::(<=>'} = \&version::vpp::vcmp;
-              *{'version::(bool'} = \&version::vpp::vbool;
-          }
-          *{'version::vpp::(""'} = \&version::vpp::stringify;
-          *{'version::vpp::(0+'} = \&version::vpp::numify;
-          *{'version::vpp::(cmp'} = \&version::vpp::vcmp;
-          *{'version::vpp::(<=>'} = \&version::vpp::vcmp;
-          *{'version::vpp::(bool'} = \&version::vpp::vbool;
-          *{'charstar::(""'} = \&charstar::thischar;
-          *{'charstar::(0+'} = \&charstar::thischar;
-          *{'charstar::(++'} = \&charstar::increment;
-          *{'charstar::(--'} = \&charstar::decrement;
-          *{'charstar::(+'} = \&charstar::plus;
-          *{'charstar::(-'} = \&charstar::minus;
-          *{'charstar::(*'} = \&charstar::multiply;
-          *{'charstar::(cmp'} = \&charstar::cmp;
-          *{'charstar::(<=>'} = \&charstar::spaceship;
-          *{'charstar::(bool'} = \&charstar::thischar;
-          *{'charstar::(='} = \&charstar::clone;
-          $restored = 1;
+      if ($self->{overloaded}{'charstar::(""'}) {
+          package #
+              charstar;
+          overload->import;
       }
-      # version in core
-      if (!$restored) {
-          *{'version::(""'} = \&version::stringify;
-          *{'version::(0+'} = \&version::numify;
-          *{'version::(cmp'} = \&version::vcmp;
-          *{'version::(<=>'} = \&version::vcmp;
-          *{'version::(bool'} = \&version::boolean;
+      if ($self->{overloaded}{'version::vpp::(""'} && !$used_version_in_safe) {
+          package #
+              version::vpp;
+          overload->import;
       }
   }
   
@@ -21000,6 +20979,9 @@ $fatpacked{"Parse/PMFile.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PA
           close FH;
   
           $result = "undef" unless defined $result;
+          if ((ref $result) =~ /^version(?:::vpp)?\b/) {
+              $result = $result->numify;
+          }
           return $result;
       }
   }
