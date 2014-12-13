@@ -24,7 +24,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7021";
+  our $VERSION = "1.7022";
   
   =encoding utf8
   
@@ -2894,7 +2894,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       my $provides = {};
   
       for my $file (@files) {
-          my $parser = Parse::PMFile->new($meta);
+          my $parser = Parse::PMFile->new($meta, { UNSAFE => 1, ALLOW_DEV_VERSION => 1 });
           my $packages = $parser->parse($file);
   
           while (my($package, $meta) = each %$packages) {
